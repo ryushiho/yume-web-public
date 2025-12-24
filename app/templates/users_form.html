@@ -1,0 +1,60 @@
+{# app/templates/users_form.html #}
+{% extends "base.html" %}
+
+{% block title %}
+    {% if action == "create" %}유저 추가{% else %}유저 수정{% endif %}
+{% endblock %}
+
+{% block content %}
+<h1>
+    {% if action == "create" %}유저 추가{% else %}유저 수정{% endif %}
+</h1>
+
+{% if error %}
+<div class="alert alert-danger">
+    {{ error }}
+</div>
+{% endif %}
+
+<form method="post">
+    <div class="mb-3">
+        <label for="discord_id" class="form-label">Discord ID</label>
+        <input
+            type="text"
+            class="form-control"
+            id="discord_id"
+            name="discord_id"
+            value="{{ form_discord_id }}"
+            required
+        >
+    </div>
+
+    <div class="mb-3">
+        <label for="name" class="form-label">닉네임</label>
+        <input
+            type="text"
+            class="form-control"
+            id="name"
+            name="name"
+            value="{{ form_name }}"
+            required
+        >
+    </div>
+
+    <div class="mb-3">
+        <label for="memo" class="form-label">메모</label>
+        <textarea
+            class="form-control"
+            id="memo"
+            name="memo"
+            rows="4"
+        >{{ form_memo }}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">
+        {% if action == "create" %}추가{% else %}저장{% endif %}
+    </button>
+
+    <a href="/users/" class="btn btn-secondary">목록으로</a>
+</form>
+{% endblock %}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Yume Admin 로그인{% endblock %}
+{% block header_title %}Yume Admin 로그인{% endblock %}
+
+{% block content %}
+<div style="max-width:420px; margin:3rem auto;">
+    <div style="
+        background:#020617;
+        border-radius:0.75rem;
+        padding:2.0rem 2.2rem;
+        box-shadow:0 20px 40px rgba(15,23,42,0.7);
+        border:1px solid #1f2937;
+    ">
+        <h1 style="font-size:1.4rem; font-weight:700; margin-bottom:1.3rem; text-align:center;">
+            Yume Admin 로그인
+        </h1>
+
+        {% if error is defined and error %}
+        <div style="
+            background:#7f1d1d;
+            border-radius:0.5rem;
+            padding:0.75rem 1rem;
+            color:#fee2e2;
+            font-size:0.92rem;
+            margin-bottom:1rem;
+        ">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="post" action="/auth/login">
+            <div style="margin-bottom:0.9rem;">
+                <label for="username" style="display:block; font-size:0.85rem; color:#e5e7eb; margin-bottom:0.25rem;">
+                    아이디
+                </label>
+                <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    autocomplete="username"
+                    style="
+                        width:100%;
+                        padding:0.55rem 0.7rem;
+                        border-radius:0.5rem;
+                        border:1px solid #374151;
+                        background:#020617;
+                        color:#f9fafb;
+                        font-size:0.92rem;
+                    "
+                    required
+                >
+            </div>
+
+            <div style="margin-bottom:1.1rem;">
+                <label for="password" style="display:block; font-size:0.85rem; color:#e5e7eb; margin-bottom:0.25rem;">
+                    비밀번호
+                </label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    autocomplete="current-password"
+                    style="
+                        width:100%;
+                        padding:0.55rem 0.7rem;
+                        border-radius:0.5rem;
+                        border:1px solid #374151;
+                        background:#020617;
+                        color:#f9fafb;
+                        font-size:0.92rem;
+                    "
+                    required
+                >
+            </div>
+
+            <button
+                type="submit"
+                style="
+                    width:100%;
+                    padding:0.6rem 0.75rem;
+                    border:none;
+                    border-radius:9999px;
+                    background:linear-gradient(90deg,#6366f1,#ec4899);
+                    color:white;
+                    font-weight:600;
+                    font-size:0.95rem;
+                    cursor:pointer;
+                "
+            >
+                로그인
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

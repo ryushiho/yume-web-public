@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}블루전 전적 목록{% endblock %}
+
+{% block content %}
+<h1>블루전 전적 목록</h1>
+
+<p>
+    총 매치 수: <strong>{{ total_matches }}</strong>
+</p>
+
+<table class="table table-striped table-bordered align-middle">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>모드</th>
+            <th>상태</th>
+            <th>선공</th>
+            <th>승자</th>
+            <th>패자</th>
+            <th>승차</th>
+            <th>턴 수</th>
+            <th>시작 시각</th>
+            <th>종료 시각</th>
+            <th>상세</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        {% set m = row.match %}
+        <tr>
+            <td>{{ m.id }}</td>
+            <td>{{ m.mode }}</td>
+            <td>{{ m.status }}</td>
+            <td>
+                {{ row.starter_name }}
+            </td>
+            <td>
+                {{ row.winner_name }}
+            </td>
+            <td>
+                {{ row.loser_name }}
+            </td>
+            <td>
+                {% if m.win_gap is not none %}
+                    {{ m.win_gap }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                {% if m.total_rounds is not none %}
+                    {{ m.total_rounds }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>{{ m.started_at or "-" }}</td>
+            <td>{{ m.finished_at or "-" }}</td>
+            <td>
+                <a href="/records/{{ m.id }}" class="btn btn-sm btn-primary">상세</a>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="11" class="text-center">
+                아직 기록된 매치가 없습니다.
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}유저 상세{% endblock %}
+{% block header_title %}유저 상세{% endblock %}
+
+{% block content %}
+{# 필드 이름이 어떻게 되어 있든 최대한 유연하게 잡기 #}
+{% set nickname =
+    (user.nickname if user.nickname is defined and user.nickname else
+     user.name if user.name is defined and user.name else
+     user.display_name if user.display_name is defined and user.display_name else
+     user.username if user.username is defined and user.username else
+     "-")
+%}
+
+{% set note =
+    (user.note if user.note is defined and user.note else
+     user.memo if user.memo is defined and user.memo else
+     user.comment if user.comment is defined and user.comment else
+     "-")
+%}
+
+{% set discord_id =
+    (user.discord_id if user.discord_id is defined and user.discord_id else
+     user.discord if user.discord is defined and user.discord else
+     user.discordid if user.discordid is defined and user.discordid else
+     "-")
+%}
+
+<h1>유저 상세</h1>
+<p style="margin-bottom: 1rem;">
+    님의 정보와 블루전 전적입니다.
+</p>
+
+<div style="margin-bottom: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+    <a href="/users/{{ user.id }}/edit" class="btn btn-secondary">정보 수정</a>
+    <a href="/users/{{ user.id }}/stats/edit" class="btn btn-primary">전적 수정</a>
+    <a href="/users/" class="btn btn-secondary">유저 목록으로</a>
+</div>
+
+<section style="margin-bottom: 1.5rem;">
+    <h2 style="font-size:1.1rem; margin-bottom:0.5rem;">기본 정보</h2>
+    <table style="max-width: 480px;">
+        <tbody>
+        <tr>
+            <th style="width:130px;">디스코드 ID</th>
+            <td>{{ discord_id }}</td>
+        </tr>
+        <tr>
+            <th>닉네임</th>
+            <td>{{ nickname }}</td>
+        </tr>
+        <tr>
+            <th>비고</th>
+            <td>{{ note }}</td>
+        </tr>
+        </tbody>
+    </table>
+</section>
+
+<section style="margin-bottom: 1.5rem;">
+    <h2 style="font-size:1.1rem; margin-bottom:0.5rem;">기본 전적</h2>
+    <table style="max-width: 320px;">
+        <tbody>
+        <tr>
+            <th style="width:130px;">기본 승리 수</th>
+            <td>{{ user.base_wins }}</td>
+        </tr>
+        <tr>
+            <th>기본 패배 수</th>
+            <td>{{ user.base_losses }}</td>
+        </tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2 style="font-size:1.1rem; margin-bottom:0.5rem;">참가 매치 목록</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>매치 ID</th>
+            <th>모드</th>
+            <th>시작 시각</th>
+            <th>종료 시각</th>
+            <th>결과</th>
+        </tr>
+        </thead>
+        <tbody>
+        {# 아직 매치 테이블은 안 붙였으니, 일단 안내 메시지만 표시 #}
+        <tr>
+            <td colspan="5">아직 전적이 없습니다.</td>
+        </tr>
+        </tbody>
+    </table>
+</section>
+{% endblock %}

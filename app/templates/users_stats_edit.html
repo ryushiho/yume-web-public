@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}전적 수정{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+    <div>
+        <h1 style="font-size:28px;font-weight:700;margin:0;">유저 전적 수정</h1>
+        <p style="color:#9ca3af;margin:4px 0 0 0;">
+            {{ user.name }} (디스코드 ID: {{ user.discord_id }})
+        </p>
+    </div>
+    <div>
+        <a href="/users/{{ user.id }}"
+           style="display:inline-block;padding:8px 14px;border-radius:6px;
+                  background:#374151;color:#e5e7eb;text-decoration:none;font-size:14px;">
+            유저 상세로
+        </a>
+        <a href="/users/"
+           style="display:inline-block;padding:8px 14px;border-radius:6px;
+                  background:#111827;color:#9ca3af;text-decoration:none;font-size:14px;margin-left:6px;">
+            유저 목록으로
+        </a>
+    </div>
+</div>
+
+<div style="background:#020617;border-radius:12px;padding:20px;border:1px solid #111827;max-width:520px;">
+    <!-- 여기서도 url_for 대신 경로 문자열 사용 -->
+    <form method="post" action="/users/{{ user.id }}/stats">
+        <div style="margin-bottom:12px;">
+            <label for="base_wins" style="display:block;font-size:14px;color:#e5e7eb;margin-bottom:4px;">
+                기본 승수
+            </label>
+            <input id="base_wins" name="base_wins" type="number" min="0"
+                   value="{{ user.base_wins or 0 }}"
+                   style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #1f2937;
+                          background:#020617;color:#e5e7eb;font-size:14px;">
+        </div>
+
+        <div style="margin-bottom:12px;">
+            <label for="base_losses" style="display:block;font-size:14px;color:#e5e7eb;margin-bottom:4px;">
+                기본 패수
+            </label>
+            <input id="base_losses" name="base_losses" type="number" min="0"
+                   value="{{ user.base_losses or 0 }}"
+                   style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #1f2937;
+                          background:#020617;color:#e5e7eb;font-size:14px;">
+        </div>
+
+        <div style="margin-bottom:16px;">
+            <label for="note" style="display:block;font-size:14px;color:#e5e7eb;margin-bottom:4px;">
+                비고
+            </label>
+            <textarea id="note" name="note" rows="3"
+                      style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #1f2937;
+                             background:#020617;color:#e5e7eb;font-size:14px;resize:vertical;">{{ user.note or "" }}</textarea>
+            <p style="font-size:12px;color:#6b7280;margin-top:4px;">
+                유저에 대한 메모나 참고용 정보를 자유롭게 적어둘 수 있습니다.
+            </p>
+        </div>
+
+        <div style="display:flex;gap:8px;">
+            <button type="submit"
+                    style="padding:8px 16px;border-radius:6px;border:none;
+                           background:#6366f1;color:white;font-size:14px;cursor:pointer;">
+                저장
+            </button>
+            <a href="/users/{{ user.id }}"
+               style="padding:8px 14px;border-radius:6px;
+                      background:#111827;color:#e5e7eb;text-decoration:none;font-size:14px;">
+                취소
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+

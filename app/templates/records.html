@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>블루전 기록 (DB)</title>
+</head>
+<body>
+    <h2>블루전 기록 (DB에서 조회)</h2>
+
+    <p>현재 로그인: {{ username }}</p>
+    <p><a href="/">← 대시보드로 돌아가기</a></p>
+
+    <p>
+        전체 {{ total }} 건 / 페이지 {{ page }} / {{ total_pages }}<br>
+        (페이지당 {{ page_size }}건)
+    </p>
+
+    {% if total == 0 %}
+        <p>DB에 저장된 블루전 기록이 없습니다. (마이그레이션을 했는지 확인하세요.)</p>
+    {% else %}
+        <table border="1" cellpadding="5">
+            <tr>
+                <th>ID</th>
+                <th>유저 ID</th>
+                <th>원본 JSON</th>
+            </tr>
+
+            {% for row in records %}
+            <tr>
+                <td>{{ row.id }}</td>
+                <td>{{ row.user_id }}</td>
+                <td>
+<pre style="max-width:600px; max-height:200px; overflow:auto; white-space:pre-wrap; word-break:break-all; background:#f4f4f4;">
+{{ row.raw_json }}
+</pre>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+
+        <p>
+            {% if page > 1 %}
+                <a href="/records?page={{ page - 1 }}&page_size={{ page_size }}">이전</a>
+            {% endif %}
+
+            {% if page < total_pages %}
+                <a href="/records?page={{ page + 1 }}&page_size={{ page_size }}">다음</a>
+            {% endif %}
+        </p>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}블루전 전적 상세{% endblock %}
+{% block header_title %}블루전 전적 상세{% endblock %}
+
+{% block content %}
+{# match / record 둘 중 뭐로 넘겨줘도 동작하게 통합 #}
+{% set m = match if match is defined else record if record is defined else None %}
+
+{% if not m %}
+    <h1>블루전 전적 상세</h1>
+    <p>전적 정보를 불러오지 못했습니다.</p>
+    <p><a href="/records/" class="btn btn-secondary">전적 목록으로</a></p>
+{% else %}
+
+<h1>블루전 전적 상세</h1>
+
+<div style="margin-bottom: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+    <a href="/records/" class="btn btn-secondary">전적 목록으로</a>
+</div>
+
+<section style="margin-bottom: 1.5rem;">
+    <h2 style="font-size:1.1rem; margin-bottom:0.5rem;">기본 정보</h2>
+    <table style="max-width: 520px;">
+        <tbody>
+        <tr>
+            <th style="width:140px;">매치 ID</th>
+            <td>{{ m.id }}</td>
+        </tr>
+        <tr>
+            <th>모드</th>
+            <td>{{ m.mode }}</td>
+        </tr>
+        <tr>
+            <th>상태</th>
+            <td>{{ m.status }}</td>
+        </tr>
+        <tr>
+            <th>총 단어 수</th>
+            <td>{{ m.total_rounds or "-" }}</td>
+        </tr>
+        <tr>
+            <th>시작 시각</th>
+            <td>{{ m.started_at }}</td>
+        </tr>
+        <tr>
+            <th>종료 시각</th>
+            <td>{{ m.finished_at }}</td>
+        </tr>
+        <tr>
+            <th>시작 유저(디스코드 ID)</th>
+            <td>{{ m.starter_discord_id }}</td>
+        </tr>
+        <tr>
+            <th>승자(디스코드 ID)</th>
+            <td>{{ m.winner_discord_id or "-" }}</td>
+        </tr>
+        <tr>
+            <th>패자(디스코드 ID)</th>
+            <td>{{ m.loser_discord_id or "-" }}</td>
+        </tr>
+        <tr>
+            <th>승차</th>
+            <td>{{ m.win_gap if m.win_gap is not none else "-" }}</td>
+        </tr>
+        <tr>
+            <th>비고</th>
+            <td>{{ m.note or "-" }}</td>
+        </tr>
+        </tbody>
+    </table>
+</section>
+
+{# 참가자 목록 #}
+{% set parts = participants if participants is defined else m.participants if m.participants is defined else [] %}
+
+<section style="margin-bottom: 1.5rem;">
+    <h2 style="font-size:1.1rem; margin-bottom:0.5rem;">참가자</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>사이드</th>
+            <th>디스코드 ID</th>
+            <th>이름</th>
+            <th>AI 이름</th>
+            <th>승리 여부</th>
+            <th>점수</th>
+            <th>턴 수</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% if parts and parts|length > 0 %}
+            {% for p in parts %}
+                <tr>
+                    <td>{{ p.side }}</td>
+                    <td>{{ p.discord_id or "-" }}</td>
+                    <td>
+                        {% if p.user and p.user.nickname %}
+                            {{ p.user.nickname }}
+                        {% elif p.name %}
+                            {{ p.name }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>{{ p.ai_name or "-" }}</td>
+                    <td>
+                        {% if p.is_winner %}
+                            ✅ 승
+                        {% else %}
+                            ❌ 패
+                        {% endif %}
+                    </td>
+                    <td>{{ p.score if p.score is not none else "-" }}</td>
+                    <td>{{ p.turns if p.turns is not none else "-" }}</td>
+                </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td colspan="7">참가자 정보가 없습니다.</td>
+            </tr>
+        {% endif %}
+        </tbody>
+    </table>
+</section>
+
+{# 단어 복기 로그 #}
+<section style="margin-bottom: 1.5rem;">
+    <h2 style="font-size:1.1rem; margin-bottom:0.5rem;">단어 복기</h2>
+    {% if m.review_log %}
+        <div style="
+            white-space: pre-wrap;
+            font-size:0.9rem;
+            border:1px solid #1f2937;
+            padding:0.75rem;
+            border-radius:0.5rem;
+            background-color:#020617;
+        ">
+            {{ m.review_log }}
+        </div>
+    {% else %}
+        <p style="font-size:0.9rem; color:#9ca3af;">아직 복기 로그가 없어요.</p>
+    {% endif %}
+</section>
+
+{% endif %}
+{% endblock %}

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}유저 상세{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+    <div>
+        <h1 style="font-size:28px;font-weight:700;margin:0;">유저 상세</h1>
+        <p style="color:#9ca3af;margin:4px 0 0 0;">블루전 관리용 유저 정보입니다.</p>
+    </div>
+    <div>
+        <!-- 전적 수정 버튼: 반드시 user.id 사용 -->
+        <a href="{{ url_for('user_stats_edit', user_id=user.id) }}"
+           style="display:inline-block;padding:8px 14px;border-radius:6px;
+                  background:#6366f1;color:white;text-decoration:none;font-size:14px;">
+            전적 수정
+        </a>
+        <a href="{{ url_for('users_list') }}"
+           style="display:inline-block;padding:8px 14px;border-radius:6px;
+                  background:#374151;color:#e5e7eb;text-decoration:none;font-size:14px;margin-left:6px;">
+            유저 목록으로
+        </a>
+    </div>
+</div>
+
+<div style="background:#020617;border-radius:12px;padding:20px;border:1px solid #111827;">
+    <h2 style="font-size:18px;margin-top:0;margin-bottom:16px;">기본 정보</h2>
+    <dl style="display:grid;grid-template-columns:120px 1fr;row-gap:8px;column-gap:8px;font-size:14px;">
+        <dt style="color:#9ca3af;">디스코드 ID</dt>
+        <dd style="margin:0;color:#e5e7eb;">{{ user.discord_id }}</dd>
+
+        <dt style="color:#9ca3af;">이름(닉네임)</dt>
+        <dd style="margin:0;color:#e5e7eb;">{{ user.name }}</dd>
+
+        <dt style="color:#9ca3af;">비고</dt>
+        <dd style="margin:0;color:#e5e7eb;">{{ user.note or "-" }}</dd>
+    </dl>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:20px;">
+    <div style="background:#020617;border-radius:12px;padding:16px;border:1px solid #111827;">
+        <h3 style="font-size:16px;margin-top:0;margin-bottom:12px;">기본 전적</h3>
+        <p style="margin:0;font-size:14px;">
+            <span style="color:#9ca3af;">기본 승수:</span>
+            <span style="color:#22c55e;">{{ user.base_wins }}</span>
+        </p>
+        <p style="margin:4px 0 0 0;font-size:14px;">
+            <span style="color:#9ca3af;">기본 패수:</span>
+            <span style="color:#ef4444;">{{ user.base_losses }}</span>
+        </p>
+        <p style="margin:8px 0 0 0;font-size:12px;color:#6b7280;">
+            랭킹 계산 시, 블루전 기록에 더해지는 고정 전적입니다.
+        </p>
+    </div>
+</div>
+
+<div style="margin-top:24px;background:#020617;border-radius:12px;padding:16px;border:1px solid #111827;">
+    <h3 style="font-size:16px;margin-top:0;margin-bottom:12px;">참가 매치 목록</h3>
+
+    {% if records|length == 0 %}
+        <p style="font-size:14px;color:#9ca3af;margin:0;">아직 전적이 없습니다.</p>
+    {% else %}
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <thead>
+            <tr style="background:#020617;border-bottom:1px solid #1f2937;">
+                <th style="text-align:left;padding:8px 6px;color:#9ca3af;">매치 ID</th>
+                <th style="text-align:left;padding:8px 6px;color:#9ca3af;">모드</th>
+                <th style="text-align:left;padding:8px 6px;color:#9ca3af;">시작 시각</th>
+                <th style="text-align:left;padding:8px 6px;color:#9ca3af;">종료 시각</th>
+                <th style="text-align:left;padding:8px 6px;color:#9ca3af;">결과</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for r in records %}
+                <tr style="border-top:1px solid #111827;">
+                    <td style="padding:6px 6px;color:#e5e7eb;">{{ r.id }}</td>
+                    <td style="padding:6px 6px;color:#e5e7eb;">{{ r.mode }}</td>
+                    <td style="padding:6px 6px;color:#e5e7eb;">{{ r.started_at }}</td>
+                    <td style="padding:6px 6px;color:#e5e7eb;">{{ r.finished_at or "-" }}</td>
+                    <td style="padding:6px 6px;">
+                        {% if r.result == "win" %}
+                            <span style="color:#22c55e;">승</span>
+                        {% elif r.result == "lose" %}
+                            <span style="color:#ef4444;">패</span>
+                        {% else %}
+                            <span style="color:#e5e7eb;">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+</div>
+{% endblock %}

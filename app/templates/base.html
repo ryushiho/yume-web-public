@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Yume Admin - {% block title %}{% endblock %}</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background-color: #0f172a;
+            color: #e5e7eb;
+        }
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 220px;
+            background-color: #020617;
+            padding: 1.5rem 1rem;
+            box-sizing: border-box;
+        }
+        .sidebar-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 1.5rem;
+        }
+        .nav-section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: #6b7280;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .nav-link {
+            display: block;
+            padding: 0.4rem 0.6rem;
+            border-radius: 0.4rem;
+            color: #e5e7eb;
+            text-decoration: none;
+            font-size: 0.9rem;
+            margin-bottom: 0.2rem;
+        }
+        .nav-link:hover {
+            background-color: #111827;
+        }
+        .topbar {
+            height: 56px;
+            background-color: #020617;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.25rem;
+            box-sizing: border-box;
+            border-bottom: 1px solid #111827;
+        }
+        .topbar-title {
+            font-weight: 600;
+        }
+        .topbar-right a {
+            color: #9ca3af;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .topbar-right a:hover {
+            color: #e5e7eb;
+        }
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .content-inner {
+            padding: 1.5rem 2rem 2rem 2rem;
+            box-sizing: border-box;
+        }
+        h1 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th, td {
+            border: 1px solid #1f2937;
+            padding: 0.4rem 0.6rem;
+            text-align: left;
+        }
+        th {
+            background-color: #020617;
+            font-weight: 600;
+        }
+        .btn {
+            display: inline-block;
+            padding: 0.3rem 0.6rem;
+            border-radius: 0.3rem;
+            font-size: 0.8rem;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+        }
+        .btn-secondary {
+            background-color: #111827;
+            color: #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+{# 세션의 로그인 유저는 session_user 라는 이름으로만 사용 #}
+{% set session_user = request.session.get("user") %}
+<div class="layout">
+    <aside class="sidebar">
+        <div class="sidebar-title">Yume Admin</div>
+
+        <div class="nav-section-title">메인</div>
+        <a href="/dashboard/" class="nav-link">대시보드</a>
+
+        <div class="nav-section-title">블루전</div>
+        <a href="/records/" class="nav-link">블루전 전적</a>
+        <a href="/ranking/" class="nav-link">랭킹</a>
+
+        <div class="nav-section-title">유저</div>
+        <a href="/users/" class="nav-link">유저 관리</a>
+    </aside>
+
+    <div class="content">
+        <header class="topbar">
+            <div class="topbar-title">
+                {% block header_title %}{% endblock %}
+            </div>
+            <div class="topbar-right">
+                {% if session_user %}
+                    {% set display_name =
+                        (session_user.username if session_user.username is defined and session_user.username else
+                         session_user.id if session_user.id is defined and session_user.id else
+                         "관리자")
+                    %}
+                    <span style="font-size:0.85rem; color:#9ca3af; margin-right:0.5rem;">
+                        {{ display_name }} 님
+                    </span>
+                    <a href="/auth/logout">로그아웃</a>
+                {% else %}
+                    <a href="/auth/login">로그인</a>
+                {% endif %}
+            </div>
+        </header>
+
+        <main class="content-inner">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+</body>
+</html>

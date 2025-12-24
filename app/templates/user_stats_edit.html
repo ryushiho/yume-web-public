@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}전적 수정{% endblock %}
+{% block header_title %}전적 수정{% endblock %}
+
+{% block content %}
+{% set display_name =
+    (user.nickname if user.nickname is defined and user.nickname else
+     user.discord_id if user.discord_id is defined and user.discord_id else
+     "해당 유저")
+%}
+
+<div class="stats-card-container">
+    <div class="stats-form-card">
+        <h1>전적 수정</h1>
+        <p class="stats-subtitle">
+            <strong>{{ display_name }}</strong> 님의 블루전 기본 전적을 수정합니다.
+        </p>
+
+        <form method="post">
+            <div class="stats-form-group">
+                <label>디스코드 ID</label>
+                <div class="stats-readonly-field">
+                    {{ user.discord_id }}
+                </div>
+            </div>
+
+            <div class="stats-form-group">
+                <label for="base_wins">기본 승리 수</label>
+                <input
+                    type="number"
+                    id="base_wins"
+                    name="base_wins"
+                    value="{{ user.base_wins }}"
+                    min="0"
+                >
+            </div>
+
+            <div class="stats-form-group">
+                <label for="base_losses">기본 패배 수</label>
+                <input
+                    type="number"
+                    id="base_losses"
+                    name="base_losses"
+                    value="{{ user.base_losses }}"
+                    min="0"
+                >
+            </div>
+
+            <div class="stats-form-actions">
+                <button type="submit" class="btn btn-primary">
+                    저장
+                </button>
+                <a href="/users/{{ user.id }}" class="btn btn-secondary">
+                    유저 상세로 돌아가기
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.stats-card-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.stats-form-card {
+    background-color: #020617;
+    border-radius: 0.75rem;
+    padding: 1.75rem 2rem 2rem 2rem;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 20px 40px rgba(15,23,42,0.8);
+}
+
+.stats-form-card h1 {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+    font-size: 1.4rem;
+}
+
+.stats-subtitle {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+    color: #9ca3af;
+}
+
+.stats-form-group {
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.stats-form-group label {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: #e5e7eb;
+}
+
+.stats-form-group input[type="number"] {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #1f2937;
+    background-color: #020617;
+    color: #e5e7eb;
+    box-sizing: border-box;
+}
+
+.stats-form-group input:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 1px #4f46e5;
+}
+
+.stats-readonly-field {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #1f2937;
+    background-color: #020617;
+    color: #9ca3af;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+}
+
+.stats-form-actions {
+    margin-top: 1.5rem;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+</style>
+{% endblock %}

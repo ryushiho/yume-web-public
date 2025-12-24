@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}블루전 랭킹{% endblock %}
+{% block header_title %}블루전 랭킹{% endblock %}
+
+{% block content %}
+<h1>블루전 랭킹</h1>
+
+<div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin:0.75rem 0 1.0rem 0;">
+    {% set m = mode if mode is defined else "pvp" %}
+    <a class="btn {{ 'btn-primary' if m == 'pvp' else 'btn-secondary' }}" href="/ranking/?mode=pvp">PVP</a>
+    <a class="btn {{ 'btn-primary' if m == 'practice' else 'btn-secondary' }}" href="/ranking/?mode=practice">연습</a>
+    <a class="btn {{ 'btn-primary' if m == 'all' else 'btn-secondary' }}" href="/ranking/?mode=all">전체</a>
+</div>
+
+<p style="color:#9ca3af; margin-bottom:0.9rem;">
+    정렬 기준: <strong>순수 승차(net)</strong> → <strong>총 승(기본 전적 포함)</strong> → <strong>총 매치</strong>
+</p>
+
+<table>
+    <thead>
+    <tr>
+        <th style="width:70px;">순위</th>
+        <th style="width:220px;">이름</th>
+        <th style="width:240px;">디스코드 ID</th>
+        <th style="width:90px;">매치</th>
+        <th style="width:90px;">승</th>
+        <th style="width:90px;">패</th>
+        <th style="width:110px;">기본승/패</th>
+        <th style="width:110px;">총승/총패</th>
+        <th style="width:110px;">승률</th>
+        <th style="width:120px;">승차(+/-)</th>
+        <th style="width:90px;">net</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        <tr>
+            <td>{{ row.rank }}</td>
+            <td>{{ row.name }}</td>
+            <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:0.82rem;">
+                {{ row.discord_id }}
+            </td>
+            <td>{{ row.matches }}</td>
+            <td><span style="color:#22c55e; font-weight:600;">{{ row.wins }}</span></td>
+            <td><span style="color:#f97373;">{{ row.losses }}</span></td>
+            <td>{{ row.base_wins }}/{{ row.base_losses }}</td>
+            <td>{{ row.total_wins }}/{{ row.total_losses }}</td>
+            <td>{{ '%.1f'|format(row.win_rate) }}%</td>
+            <td>{{ row.gap_plus }}/{{ row.gap_minus }}</td>
+            <td style="font-weight:700;">
+                {% if row.net_gap >= 0 %}+{% endif %}{{ row.net_gap }}
+            </td>
+        </tr>
+    {% else %}
+        <tr>
+            <td colspan="11" style="color:#9ca3af;">아직 집계할 전적이 없습니다.</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

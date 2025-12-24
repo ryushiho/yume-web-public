@@ -1,0 +1,27 @@
+.env
+.env.*
+*.key
+*.pem
+
+# databases
+*.db
+*.sqlite
+*.sqlite3
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# misc
+*.log
+.DS_Store
+
+# artifacts / backups
+*.zip
+app/admins.json
+
+# caches
+__pycache__/

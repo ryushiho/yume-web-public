@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}유저 {{ '추가' if mode == 'create' else '수정' }}{% endblock %}
+{% block header_title %}유저 {{ '추가' if mode == 'create' else '수정' }}{% endblock %}
+
+{% block content %}
+<div style="max-width:520px; margin:2.5rem auto;">
+    <div style="
+        background:#020617;
+        border-radius:0.75rem;
+        padding:1.8rem 2.1rem;
+        box-shadow:0 20px 40px rgba(15,23,42,0.7);
+        border:1px solid #1f2937;
+    ">
+        <h1 style="font-size:1.4rem; font-weight:700; margin-bottom:1.2rem;">
+            유저 {{ '추가' if mode == 'create' else '수정' }}
+        </h1>
+
+        {% if error %}
+        <div style="
+            background:#7f1d1d;
+            border-radius:0.5rem;
+            padding:0.6rem 0.9rem;
+            color:#fee2e2;
+            font-size:0.9rem;
+            margin-bottom:0.8rem;
+        ">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="post"
+              action="{% if mode == 'create' %}/users/create{% else %}/users/{{ user.id }}/edit{% endif %}">
+            <div style="margin-bottom:0.9rem;">
+                <label style="display:block; font-size:0.85rem; color:#e5e7eb; margin-bottom:0.25rem;">
+                    디스코드 ID
+                </label>
+                <input
+                    type="text"
+                    name="discord_id"
+                    value="{{ user.discord_id if user else '' }}"
+                    required
+                    style="
+                        width:100%;
+                        padding:0.55rem 0.7rem;
+                        border-radius:0.5rem;
+                        border:1px solid #374151;
+                        background:#020617;
+                        color:#f9fafb;
+                        font-size:0.92rem;
+                    "
+                >
+            </div>
+
+            <div style="margin-bottom:0.9rem;">
+                <label style="display:block; font-size:0.85rem; color:#e5e7eb; margin-bottom:0.25rem;">
+                    이름(닉네임)
+                </label>
+                <input
+                    type="text"
+                    name="name"
+                    value="{{ user.name if user else '' }}"
+                    required
+                    style="
+                        width:100%;
+                        padding:0.55rem 0.7rem;
+                        border-radius:0.5rem;
+                        border:1px solid #374151;
+                        background:#020617;
+                        color:#f9fafb;
+                        font-size:0.92rem;
+                    "
+                >
+            </div>
+
+            <div style="margin-bottom:1.2rem;">
+                <label style="display:block; font-size:0.85rem; color:#e5e7eb; margin-bottom:0.25rem;">
+                    비고
+                </label>
+                <textarea
+                    name="note"
+                    rows="3"
+                    style="
+                        width:100%;
+                        padding:0.55rem 0.7rem;
+                        border-radius:0.5rem;
+                        border:1px solid #374151;
+                        background:#020617;
+                        color:#f9fafb;
+                        font-size:0.9rem;
+                        resize:vertical;
+                    "
+                >{{ user.note if user and user.note else '' }}</textarea>
+            </div>
+
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+                <button
+                    type="submit"
+                    style="
+                        padding:0.55rem 1.3rem;
+                        border:none;
+                        border-radius:9999px;
+                        background:linear-gradient(90deg,#6366f1,#ec4899);
+                        color:white;
+                        font-weight:600;
+                        font-size:0.9rem;
+                        cursor:pointer;
+                    "
+                >
+                    저장
+                </button>
+
+                <a href="/users/" style="
+                    padding:0.5rem 1.0rem;
+                    border-radius:9999px;
+                    border:1px solid #4b5563;
+                    color:#e5e7eb;
+                    font-size:0.88rem;
+                    text-decoration:none;
+                ">
+                    목록으로
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
