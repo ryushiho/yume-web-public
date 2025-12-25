@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_db, get_current_admin_user
+from app.dependencies import get_db, get_current_member_or_admin
 from app import models
 
 
@@ -57,7 +57,7 @@ def _resolve_display_name(
 def ranking_page(
     request: Request,
     db: Session = Depends(get_db),
-    admin=Depends(get_current_admin_user),
+    _viewer=Depends(get_current_member_or_admin),
     mode: str = "pvp",
     limit: int = 50,
 ):

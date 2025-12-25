@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}대시보드{% endblock %}
+{% block header_title %}대시보드{% endblock %}
+
+{% block content %}
+<h1 style="margin-top:0;">대시보드</h1>
+
+{% if member %}
+  <div class="card" style="margin-bottom:1rem;">
+    <div style="color:#9ca3af;">로그인: <b style="color:#e5e7eb;">{{ member.nickname }}</b> ({{ member.id }})</div>
+  </div>
+{% elif admin %}
+  <div class="card" style="margin-bottom:1rem;">
+    <div style="color:#9ca3af;">관리자 로그인 상태야. (회원 대시보드도 접근 가능)</div>
+  </div>
+{% endif %}
+
+<div style="display:flex; flex-wrap:wrap; gap:0.75rem;">
+  <a class="btn btn-primary" href="/bluewar/matches/">블루전 매치 목록 보기</a>
+  <a class="btn btn-secondary" href="/ranking/">랭킹 보기</a>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+  <div style="color:#9ca3af; line-height:1.6;">
+    <div>• 여기서는 조회 기능만 제공해.</div>
+    <div>• 전적 수정/유저 관리는 관리자만 가능해.</div>
+  </div>
+</div>
+{% endblock %}

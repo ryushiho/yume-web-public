@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}회원/관리자 권한{% endblock %}
+{% block header_title %}회원/관리자 권한{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2 style="margin-top:0;">회원 목록</h2>
+  <p style="color:#9ca3af;">회원 계정에 관리자 권한을 부여/회수할 수 있어.</p>
+
+  <form method="post" action="/admin/members/set-admin" style="margin: 1rem 0; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+    <input name="discord_id" placeholder="디스코드 ID" required style="padding:0.6rem; border-radius:0.5rem; border:1px solid #334155; background:#0b1220; color:#e5e7eb;">
+    <select name="make_admin" style="padding:0.6rem; border-radius:0.5rem; border:1px solid #334155; background:#0b1220; color:#e5e7eb;">
+      <option value="1">관리자로 지정</option>
+      <option value="0">관리자 해제</option>
+    </select>
+    <button type="submit" class="btn">적용</button>
+  </form>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>discord_id</th>
+        <th>닉네임</th>
+        <th>관리자</th>
+        <th>활성</th>
+        <th>가입일</th>
+        <th>최근 로그인</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in members %}
+      <tr>
+        <td>{{ m.discord_id }}</td>
+        <td>{{ m.nickname }}</td>
+        <td>{{ "Y" if m.is_admin else "-" }}</td>
+        <td>{{ "Y" if m.is_active else "-" }}</td>
+        <td>{{ m.created_at }}</td>
+        <td>{{ m.last_login_at or "-" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

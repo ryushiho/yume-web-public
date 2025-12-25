@@ -25,13 +25,25 @@ class Settings:
         # - 디스코드 봇에서 X-API-Token 헤더로 보내면 된다.
         self.API_TOKEN = os.getenv("YUME_API_TOKEN") or os.getenv("YUME_ADMIN_API_TOKEN")
 
+        # 유메 초대 링크 (홈 화면에서 사용)
+        self.INVITE_URL = os.getenv("YUME_INVITE_URL", "#")
+
         # 관리자 계정 (ID -> PW)
+        # (기존 방식: 관리자 로그인 페이지 /auth/login)
+
         # 공개 레포 기본값은 무조건 플레이스홀더로 둔다.
         # 운영 비번은 .env 에서 YUME_ADMIN_*_PW 로 주입할 것.
-        self.ADMIN_USERS: Dict[str, str] = {
-            "시호": os.getenv("YUME_ADMIN_SIHO_PW", "change-me"),
-            "메조": os.getenv("YUME_ADMIN_MEZO_PW", "change-me"),
-        }
+        # 요청사항: 관리자 1명만 유지
+        #   ID: 시호
+        #   PW: miyo
+        self.ADMIN_USERS: Dict[str, str] = {"시호": "miyo"}
+
+        # 회원(Member) 계정 중 관리자 권한을 부여할 디스코드 ID 목록(쉼표로 구분)
+        raw_ids = os.getenv("YUME_ADMIN_DISCORD_IDS", "").strip()
+        self.ADMIN_DISCORD_IDS = {x.strip() for x in raw_ids.split(",") if x.strip()}
+
+        # 부트스트랩(초기 1인) 관리자 디스코드 ID (선택)
+        self.BOOTSTRAP_ADMIN_DISCORD_ID = os.getenv("YUME_BOOTSTRAP_ADMIN_DISCORD_ID", "1433962010785349634").strip()
 
 
 # 전역 settings 인스턴스

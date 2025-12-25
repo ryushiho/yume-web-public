@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}블루전 매치 목록{% endblock %}
+{% block header_title %}블루전 · 매치 목록{% endblock %}
+
+{% block content %}
+<h1>블루전 매치 목록</h1>
+
+<div style="display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap; margin: 0.8rem 0 1rem;">
+  <form method="get" action="/bluewar/matches/" style="display:flex; gap:0.6rem; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">모드</div>
+      <select name="mode" style="padding:0.45rem 0.6rem; border-radius:0.6rem; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb;">
+        <option value="all" {% if mode == "all" %}selected{% endif %}>전체</option>
+        <option value="pvp" {% if mode == "pvp" %}selected{% endif %}>PVP</option>
+        <option value="practice" {% if mode == "practice" %}selected{% endif %}>연습</option>
+      </select>
+    </div>
+
+    <div>
+      <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">상태</div>
+      <select name="status" style="padding:0.45rem 0.6rem; border-radius:0.6rem; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb;">
+        <option value="all" {% if status == "all" %}selected{% endif %}>전체</option>
+        <option value="finished" {% if status == "finished" %}selected{% endif %}>finished</option>
+        <option value="running" {% if status == "running" %}selected{% endif %}>running</option>
+        <option value="aborted" {% if status == "aborted" %}selected{% endif %}>aborted</option>
+      </select>
+    </div>
+
+    <div style="flex:1; min-width:240px;">
+      <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">검색</div>
+      <input
+        type="text"
+        name="q"
+        value="{{ q }}"
+        placeholder="Discord ID / 메모 / 복기 로그"
+        style="width:100%; padding:0.45rem 0.6rem; border-radius:0.6rem; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb;"
+      />
+    </div>
+
+    <input type="hidden" name="page_size" value="{{ page_size }}" />
+    <button type="submit" style="padding:0.5rem 0.85rem; border-radius:0.6rem; border:1px solid #1f2937; background:#111827; color:#e5e7eb; cursor:pointer;">
+      적용
+    </button>
+  </form>
+
+  <div style="margin-left:auto; color:#9ca3af; font-size:0.9rem;">
+    총 <strong style="color:#e5e7eb;">{{ total }}</strong>건
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:80px;">ID</th>
+      <th style="width:90px;">모드</th>
+      <th style="width:110px;">상태</th>
+      <th>선공</th>
+      <th>승자</th>
+      <th>패자</th>
+      <th style="width:80px;">승차</th>
+      <th style="width:90px;">라운드</th>
+      <th style="width:80px;">참가</th>
+      <th style="width:190px;">시간</th>
+      <th style="width:200px;">메모</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in matches %}
+    <tr>
+      <td>
+        <a href="/bluewar/matches/{{ m.id }}" style="color:#93c5fd; text-decoration:none;">
+          #{{ m.id }}
+        </a>
+        {% if request.session.get("user") %}
+          <div style="font-size:0.8rem; margin-top:0.15rem;">
+            <a href="/records/{{ m.id }}" style="color:#9ca3af; text-decoration:none;">관리 상세</a>
+          </div>
+        {% endif %}
+      </td>
+      <td>{{ m.mode }}</td>
+      <td>{{ m.status }}</td>
+      <td>{{ m.starter }}</td>
+      <td>{{ m.winner }}</td>
+      <td>{{ m.loser }}</td>
+      <td>
+        {% if m.win_gap is not none %}
+          {{ m.win_gap }}
+        {% else %}
+          -
+        {% endif %}
+      </td>
+      <td>
+        {% if m.total_rounds is not none %}
+          {{ m.total_rounds }}
+        {% else %}
+          -
+        {% endif %}
+      </td>
+      <td>{{ m.pcount }}</td>
+      <td style="font-size:0.85rem; color:#cbd5e1;">
+        {% if m.started_at %}S: {{ m.started_at.strftime("%Y-%m-%d %H:%M") }}{% else %}-{% endif %}<br/>
+        {% if m.finished_at %}E: {{ m.finished_at.strftime("%Y-%m-%d %H:%M") }}{% else %}-{% endif %}
+      </td>
+      <td style="font-size:0.85rem; color:#cbd5e1;">
+        {% if m.note %}
+          {{ m.note[:160] }}{% if m.note|length > 160 %}…{% endif %}
+        {% else %}
+          -
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem;">
+  <div style="color:#9ca3af; font-size:0.9rem;">
+    Page {{ page }} / {{ total_pages }}
+  </div>
+
+  <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
+    {% set prev_page = page - 1 %}
+    {% set next_page = page + 1 %}
+
+    <a
+      href="/bluewar/matches/?mode={{ mode }}&status={{ status }}&q={{ q }}&page_size={{ page_size }}&page=1"
+      style="padding:0.35rem 0.6rem; border:1px solid #1f2937; border-radius:0.6rem; text-decoration:none; color:#e5e7eb; background:#0b1220;"
+    >처음</a>
+
+    <a
+      href="/bluewar/matches/?mode={{ mode }}&status={{ status }}&q={{ q }}&page_size={{ page_size }}&page={{ prev_page if prev_page >= 1 else 1 }}"
+      style="padding:0.35rem 0.6rem; border:1px solid #1f2937; border-radius:0.6rem; text-decoration:none; color:#e5e7eb; background:#0b1220;"
+    >이전</a>
+
+    <a
+      href="/bluewar/matches/?mode={{ mode }}&status={{ status }}&q={{ q }}&page_size={{ page_size }}&page={{ next_page if next_page <= total_pages else total_pages }}"
+      style="padding:0.35rem 0.6rem; border:1px solid #1f2937; border-radius:0.6rem; text-decoration:none; color:#e5e7eb; background:#0b1220;"
+    >다음</a>
+
+    <a
+      href="/bluewar/matches/?mode={{ mode }}&status={{ status }}&q={{ q }}&page_size={{ page_size }}&page={{ total_pages }}"
+      style="padding:0.35rem 0.6rem; border:1px solid #1f2937; border-radius:0.6rem; text-decoration:none; color:#e5e7eb; background:#0b1220;"
+    >끝</a>
+  </div>
+</div>
+
+{% endblock %}

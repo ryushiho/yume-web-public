@@ -97,10 +97,22 @@ async def create_match(
     - BlueWarParticipant 여러 줄 생성
     - 필요하면 users 테이블과도 연결 (discord_id 기준)
     """
+    # 방어적 정규화: 봇 쪽 mode/status 값 표기가 조금 다르게 오더라도 수용
+    mode = (data.mode or "").strip().lower()
+    if mode in {"pv", "pve", "ai", "practice"}:
+        mode = "practice"
+    elif mode in {"pvp", "versus", "vs"}:
+        mode = "pvp"
+    else:
+        # 알 수 없는 값도 일단 저장은 하되, 공백만 방지
+        mode = mode or "unknown"
+
+    status = (data.status or "").strip().lower() or "unknown"
+
     # 1) 매치 기본 정보 저장
     match = models.BlueWarMatch(
-        mode=data.mode,
-        status=data.status,
+        mode=mode,
+        status=status,
         starter_discord_id=data.starter_discord_id,
         winner_discord_id=data.winner_discord_id,
         loser_discord_id=data.loser_discord_id,

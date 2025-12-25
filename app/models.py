@@ -61,6 +61,37 @@ class User(Base):
     )
 
 
+
+class MemberUser(Base):
+    """
+    일반 회원(조회용) 계정 테이블.
+
+    - 디스코드 OAuth 없이도 "디스코드 ID + 개인 비밀번호"로 가입/로그인 가능하게 한다.
+    - 블루전 복기/매치 목록 같은 '조회' 기능 접근용.
+    - 관리자(AdminUser/settings.ADMIN_USERS)와는 권한이 분리된다.
+    """
+    __tablename__ = "member_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # 디스코드 ID (snowflake)
+    discord_id = Column(String(32), unique=True, nullable=False)
+
+    # 사이트에서 표시할 닉네임
+    nickname = Column(String(100), nullable=False)
+
+    # 비밀번호 해시 (절대 평문 저장 금지)
+    password_hash = Column(String(255), nullable=False)
+
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # 관리자 권한 (관리 페이지 접근)
+    is_admin = Column(Boolean, default=False, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login_at = Column(DateTime, nullable=True)
+
+
 class BlueWarMatch(Base):
     """
     블루전 한 판의 정보.
@@ -140,3 +171,13 @@ class BlueWarParticipant(Base):
     turns = Column(Integer, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AppMeta(Base):
+    """앱 내부 메타데이터(단발성 마이그레이션/시드 적용 여부 등)."""
+    __tablename__ = "app_meta"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+

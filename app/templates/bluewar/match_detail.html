@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}매치 상세{% endblock %}
+{% block header_title %}블루전 · 매치 상세{% endblock %}
+
+{% block content %}
+{% if error %}
+  <h1 style="margin-top:0;">매치 상세</h1>
+  <div class="card" style="border:1px solid #b91c1c; background:#1f1115;">
+    <div style="color:#fecaca;">{{ error }}</div>
+  </div>
+{% elif match %}
+  <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+    <div>
+      <h1 style="margin-top:0;">매치 #{{ match.id }}</h1>
+      <div style="color:#9ca3af; margin-top:-0.25rem;">
+        모드: <b style="color:#e5e7eb;">{{ match.mode }}</b>
+        · 상태: <b style="color:#e5e7eb;">{{ match.status }}</b>
+        {% if match.started_at %}· 시작: {{ match.started_at }}{% endif %}
+        {% if match.finished_at %}· 종료: {{ match.finished_at }}{% endif %}
+      </div>
+    </div>
+    <div style="display:flex; gap:0.6rem;">
+      <a class="btn btn-secondary" href="/bluewar/matches/">목록</a>
+      {% if is_admin %}
+        <a class="btn btn-secondary" href="/records/{{ match.id }}">관리 상세</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1rem;">
+    <h3 style="margin:0 0 0.6rem 0;">참가자</h3>
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left; color:#9ca3af; font-size:0.9rem;">
+          <th style="padding:0.5rem 0; width:70px;">사이드</th>
+          <th style="padding:0.5rem 0;">이름</th>
+          <th style="padding:0.5rem 0; width:80px;">승리</th>
+          <th style="padding:0.5rem 0; width:90px;">점수</th>
+          <th style="padding:0.5rem 0; width:90px;">턴</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in participants %}
+        <tr style="border-top:1px solid #1f2937;">
+          <td style="padding:0.55rem 0;">{{ p.side }}</td>
+          <td style="padding:0.55rem 0;">{{ p.name }}</td>
+          <td style="padding:0.55rem 0;">{% if p.is_winner %}✅{% else %}-{% endif %}</td>
+          <td style="padding:0.55rem 0;">{{ p.score if p.score is not none else "-" }}</td>
+          <td style="padding:0.55rem 0;">{{ p.turns if p.turns is not none else "-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-top:1rem;">
+    <h3 style="margin:0 0 0.6rem 0;">복기 로그</h3>
+    {% if match.review_log %}
+      <pre style="white-space:pre-wrap; word-break:break-word; background:#0b1220; border:1px solid #1f2937; border-radius:0.8rem; padding:0.8rem; margin:0;">{{ match.review_log }}</pre>
+    {% else %}
+      <div style="color:#9ca3af;">복기 로그가 아직 없어.</div>
+    {% endif %}
+  </div>
+
+  {% if match.note %}
+  <div class="card" style="margin-top:1rem;">
+    <h3 style="margin:0 0 0.6rem 0;">메모</h3>
+    <pre style="white-space:pre-wrap; word-break:break-word; background:#0b1220; border:1px solid #1f2937; border-radius:0.8rem; padding:0.8rem; margin:0;">{{ match.note }}</pre>
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

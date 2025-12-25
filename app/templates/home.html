@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}홈{% endblock %}
+{% block header_title %}shihonoyume.xyz{% endblock %}
+
+{% block content %}
+<h1 style="margin-top:0;">유메 웹</h1>
+
+<div style="display:flex; flex-wrap:wrap; gap:0.75rem; margin: 0.75rem 0 1rem;">
+  <a class="btn btn-primary" href="{{ invite_url }}" target="_blank" rel="noopener noreferrer">유메 초대 링크</a>
+  <a class="btn btn-secondary" href="{{ dashboard_url }}">대시보드</a>
+  <a class="btn btn-secondary" href="{{ admin_url }}">관리 사이트</a>
+</div>
+
+<div class="card" style="margin-top: 1rem;">
+  <div style="color:#9ca3af; line-height:1.6;">
+    <div>• 일반 회원은 회원가입/로그인 후 블루전 매치 목록과 복기(조회)를 볼 수 있어.</div>
+    <div>• 관리자는 기존 계정으로 로그인해서 유저/전적 수정 같은 관리 기능을 사용할 수 있어.</div>
+  </div>
+</div>
+{% endblock %}

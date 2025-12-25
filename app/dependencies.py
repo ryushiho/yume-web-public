@@ -1,8 +1,10 @@
 # app/dependencies.py
 
-from typing import Generator, Optional, Dict, Any
+from __future__ import annotations
 
-from fastapi import Depends, HTTPException, Request, status
+from typing import Any, Dict, Generator, Optional
+
+from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
@@ -20,33 +22,79 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-async def get_current_admin_user(
-    request: Request,
-) -> Dict[str, Any]:
-    """
-    로그인된 관리자(세션 기반) 가져오기.
+async def get_current_admin_user(request: Request) -> Dict[str, Any]:
+    """관리자 권한 확인.
 
-    - auth.py 에서 로그인 성공 시:
-        request.session["user"] = {"id": username}
-      이런 형태로 저장하고 있으므로, 여기서 그대로 꺼내 쓴다.
-    - 로그인 안 되어 있으면 /auth/login 으로 리다이렉트.
+    - (구) /auth/login 세션: request.session["user"]
+    - (신) 회원 로그인 세션: request.session["member"]["is_admin"] == True
     """
     user = request.session.get("user")
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_303_SEE_OTHER,
-            headers={"Location": "/auth/login"},
-        )
+    if user:
+        return user
 
-    return user
+    member = request.session.get("member") or {}
+    if member and member.get("is_admin"):
+        # 관리자도 기존 템플릿/라우터 호환을 위해 {"id": "..."} 형태 비슷하게 맞춘다.
+        return {"id": member.get("id"), "member_id": member.get("member_id"), "nickname": member.get("nickname")}
+
+    raise HTTPException(
+        status_code=status.HTTP_303_SEE_OTHER,
+        headers={"Location": "/member/login"},
+    )
 
 
-async def get_optional_admin_user(
-    request: Request,
-) -> Optional[Dict[str, Any]]:
+
+async def get_optional_admin_user(request: Request) -> Optional[Dict[str, Any]]:
     """
     로그인 여부가 선택적인 경우 사용할 수 있는 버전.
     - 로그인 안 되어 있으면 None
     - 되어 있으면 {"id": username} 형태의 딕셔너리 반환
     """
     return request.session.get("user")
+
+
+async def get_current_member_user(request: Request) -> Dict[str, Any]:
+    """
+    로그인된 일반 회원(세션 기반) 가져오기.
+
+    - member.py 로그인 성공 시:
+        request.session["member"] = {"id": discord_id, "nickname": "...", "member_id": 1}
+      형태로 저장한다.
+    - 로그인 안 되어 있으면 /member/login 으로 리다이렉트.
+    """
+    member = request.session.get("member")
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_303_SEE_OTHER,
+            headers={"Location": "/member/login"},
+        )
+    return member
+
+
+async def get_optional_member_user(request: Request) -> Optional[Dict[str, Any]]:
+    return request.session.get("member")
+
+
+async def get_current_member_or_admin(request: Request) -> Dict[str, Any]:
+    """
+    '조회 페이지'에서 사용.
+    - admin이면 {"role":"admin", ...}
+    - member면 {"role":"member", ...}
+    - 둘 다 아니면 member 로그인으로 보냄
+    """
+    admin = request.session.get("user")
+    if admin:
+        out = dict(admin)
+        out["role"] = "admin"
+        return out
+
+    member = request.session.get("member")
+    if member:
+        out = dict(member)
+        out["role"] = "member"
+        return out
+
+    raise HTTPException(
+        status_code=status.HTTP_303_SEE_OTHER,
+        headers={"Location": "/member/login"},
+    )
