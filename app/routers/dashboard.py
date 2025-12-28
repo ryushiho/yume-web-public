@@ -3,10 +3,12 @@
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_admin_user
 from app.models import User, BlueWarMatch
+from app.utils.time import fmt_kst
 
 router = APIRouter(
     prefix="/dashboard",
@@ -36,12 +38,56 @@ def dashboard(
     total_matches = db.query(BlueWarMatch).count()
 
     # 최근 매치 10개 (최신순)
-    recent_matches = (
+    recent_matches_raw = (
         db.query(BlueWarMatch)
         .order_by(BlueWarMatch.started_at.desc())
         .limit(10)
         .all()
     )
+
+    def mode_label(mode: str) -> str:
+        m = (mode or "").strip().lower()
+        if m == "pvp":
+            return "PVP"
+        if m == "practice":
+            return "연습"
+        return mode
+
+    # 표시용: 모드별 시퀀스 번호 -> PVP는 #1부터, 연습은 #10001부터
+    match_ids = [int(m.id) for m in recent_matches_raw]
+    seq_by_match_id = {}
+    if match_ids:
+        seq_subq = (
+            db.query(
+                BlueWarMatch.id.label("id"),
+                BlueWarMatch.mode.label("mode"),
+                func.row_number()
+                .over(partition_by=BlueWarMatch.mode, order_by=BlueWarMatch.id.asc())
+                .label("seq"),
+            )
+        ).subquery()
+        seq_rows = (
+            db.query(seq_subq.c.id, seq_subq.c.seq)
+            .filter(seq_subq.c.id.in_(match_ids))
+            .all()
+        )
+        seq_by_match_id = {int(r.id): int(r.seq) for r in seq_rows}
+
+    recent_matches = []
+    for m in recent_matches_raw:
+        seq = seq_by_match_id.get(int(m.id), int(m.id))
+        disp = (10000 + seq) if (m.mode or "").strip().lower() == "practice" else seq
+        recent_matches.append(
+            {
+                "id": m.id,
+                "display_id": f"#{disp}",
+                "mode_label": mode_label(m.mode),
+                "status": m.status,
+                "win_gap": m.win_gap,
+                "total_rounds": m.total_rounds,
+                "started_at": fmt_kst(m.started_at, "%Y-%m-%d %H:%M:%S"),
+            }
+        )
 
     return templates.TemplateResponse(
         "dashboard.html",

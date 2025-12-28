@@ -12,9 +12,9 @@
 {% elif match %}
   <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
     <div>
-      <h1 style="margin-top:0;">매치 #{{ match.id }}</h1>
+      <h1 style="margin-top:0;">매치 {{ display_id }}</h1>
       <div style="color:#9ca3af; margin-top:-0.25rem;">
-        모드: <b style="color:#e5e7eb;">{{ match.mode }}</b>
+        모드: <b style="color:#e5e7eb;">{{ mode_label }}</b>
         · 상태: <b style="color:#e5e7eb;">{{ match.status }}</b>
         {% if started_at and started_at != '-' %}· 시작: {{ started_at }}{% endif %}
         {% if finished_at and finished_at != '-' %}· 종료: {{ finished_at }}{% endif %}
@@ -63,11 +63,6 @@
     {% endif %}
   </div>
 
-  {% if match.note %}
-  <div class="card" style="margin-top:1rem;">
-    <h3 style="margin:0 0 0.6rem 0;">메모</h3>
-    <pre style="white-space:pre-wrap; word-break:break-word; background:#0b1220; border:1px solid #1f2937; border-radius:0.8rem; padding:0.8rem; margin:0;">{{ match.note }}</pre>
-  </div>
-  {% endif %}
+  {# 메모(note)는 공개 화면에서 노출하지 않음 #}
 {% endif %}
 {% endblock %}

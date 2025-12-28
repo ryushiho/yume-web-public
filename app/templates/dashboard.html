@@ -38,8 +38,8 @@
     <tbody>
         {% for m in recent_matches %}
         <tr>
-            <td>{{ m.id }}</td>
-            <td>{{ m.mode }}</td>
+            <td>{{ m.display_id }}</td>
+            <td>{{ m.mode_label }}</td>
             <td>{{ m.status }}</td>
             <td>{{ m.win_gap is not none and m.win_gap or "-" }}</td>
             <td>{{ m.total_rounds is not none and m.total_rounds or "-" }}</td>

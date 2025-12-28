@@ -223,11 +223,11 @@ def list_records(
     for m in matches:
         seq = seq_by_match_id.get(int(m.id), int(m.id))
         if (m.mode or "").lower() == "pvp":
-            display_id = f"PVP#{seq}"
+            display_id = f"#{seq}"
         elif (m.mode or "").lower() == "practice":
-            display_id = f"연습#{seq}"
+            display_id = f"#{10000 + int(seq)}"
         else:
-            display_id = f"{m.mode}#{seq}"
+            display_id = f"#{seq}"
 
         winner_name = _resolve_display_name(
             discord_id=m.winner_discord_id,
@@ -330,11 +330,11 @@ def record_detail(
     )
     seq_i = int(seq) if seq is not None else int(match.id)
     if (match.mode or "").lower() == "pvp":
-        display_id = f"PVP#{seq_i}"
+        display_id = f"#{seq_i}"
     elif (match.mode or "").lower() == "practice":
-        display_id = f"연습#{seq_i}"
+        display_id = f"#{10000 + int(seq_i)}"
     else:
-        display_id = f"{match.mode}#{seq_i}"
+        display_id = f"#{seq_i}"
 
     # 표시용: 연습 난이도/AI 라벨 추정
     ai_label: Optional[str] = None

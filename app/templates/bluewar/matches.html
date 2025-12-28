@@ -33,7 +33,7 @@
         type="text"
         name="q"
         value="{{ q }}"
-        placeholder="Discord ID / 메모 / 복기 로그"
+        placeholder="Discord ID / 복기 로그"
         style="width:100%;"
       />
     </div>
@@ -60,7 +60,7 @@
       <th style="width:90px;">라운드</th>
       <th style="width:80px;">참가</th>
       <th style="width:190px;">시간</th>
-      <th style="width:200px;">메모</th>
+      {# 메모(=note) UI는 공개 화면에서 노출하지 않음 #}
     </tr>
   </thead>
   <tbody>
@@ -68,7 +68,7 @@
     <tr>
       <td>
         <a href="/bluewar/matches/{{ m.id }}" style="color:#93c5fd; text-decoration:none;">
-          #{{ m.id }}
+          {{ m.display_id }}
         </a>
         {% if request.session.get("user") %}
           <div style="font-size:0.8rem; margin-top:0.15rem;">
@@ -76,7 +76,7 @@
           </div>
         {% endif %}
       </td>
-      <td>{{ m.mode }}</td>
+      <td>{{ m.mode_label }}</td>
       <td>{{ m.status }}</td>
       <td>{{ m.starter }}</td>
       <td>{{ m.winner }}</td>
@@ -99,13 +99,6 @@
       <td style="font-size:0.85rem; color:#cbd5e1;">
         S: {{ m.started_at if m.started_at else "-" }}<br/>
         E: {{ m.finished_at if m.finished_at else "-" }}
-      </td>
-      <td style="font-size:0.85rem; color:#cbd5e1;">
-        {% if m.note %}
-          {{ m.note[:160] }}{% if m.note|length > 160 %}…{% endif %}
-        {% else %}
-          -
-        {% endif %}
       </td>
     </tr>
     {% endfor %}

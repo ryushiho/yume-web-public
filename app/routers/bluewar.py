@@ -41,6 +41,35 @@ def _resolve_display_name(
     return discord_id
 
 
+def _mode_label(mode: str, *, ai_label: Optional[str] = None) -> str:
+    """UI 표시용 모드 라벨.
+
+    - pvp -> PVP
+    - practice -> 연습 (AI/난이도가 있으면 괄호로 표시)
+    """
+
+    m = (mode or "").strip().lower()
+    if m == "pvp":
+        return "PVP"
+    if m == "practice":
+        if ai_label:
+            label = ai_label
+            if label.strip().lower() == "yume":
+                label = "유메"
+            return f"연습 ({label})"
+        return "연습"
+    return mode
+
+
+def _display_id_number(mode: str, seq: int) -> int:
+    """요구사항: PVP는 #1부터, PVBOT(연습)은 #10001부터."""
+
+    m = (mode or "").strip().lower()
+    if m == "practice":
+        return 10000 + int(seq)
+    return int(seq)
+
+
 @router.get("/matches/", response_class=HTMLResponse)
 def list_bluewar_matches(
     request: Request,
@@ -48,7 +77,7 @@ def list_bluewar_matches(
     viewer=Depends(get_current_member_or_admin),
     mode: str = Query(default="all", description="all|pvp|practice"),
     status: str = Query(default="all", description="all|finished|aborted|running"),
-    q: str = Query(default="", description="검색어(Discord ID/메모/복기 로그)"),
+    q: str = Query(default="", description="검색어(Discord ID/복기 로그)"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=10, le=200),
 ):
@@ -116,6 +145,30 @@ def list_bluewar_matches(
         .all()
     )
 
+    # 표시용: 모드별 시퀀스 번호 (PVP는 1부터, 연습은 1부터 -> 화면에서는 10001부터)
+    match_ids_for_seq = [int(m.id) for m, _pc in rows]
+    seq_by_match_id: Dict[int, int] = {}
+    if match_ids_for_seq:
+        seq_subq = (
+            db.query(
+                models.BlueWarMatch.id.label("id"),
+                models.BlueWarMatch.mode.label("mode"),
+                func.row_number()
+                .over(
+                    partition_by=models.BlueWarMatch.mode,
+                    order_by=models.BlueWarMatch.id.asc(),
+                )
+                .label("seq"),
+            )
+        ).subquery()
+
+        rows_seq = (
+            db.query(seq_subq.c.id, seq_subq.c.seq)
+            .filter(seq_subq.c.id.in_(match_ids_for_seq))
+            .all()
+        )
+        seq_by_match_id = {int(r.id): int(r.seq) for r in rows_seq}
+
     # 표시 이름 resolve (User.nickname 우선, 없으면 Participant.name fallback)
     discord_ids: Set[str] = set()
     for match, _pcount in rows:
@@ -150,10 +203,14 @@ def list_bluewar_matches(
 
     matches: List[Dict[str, object]] = []
     for match, pcount in rows:
+        seq = seq_by_match_id.get(int(match.id), int(match.id))
+        disp_num = _display_id_number(match.mode, seq)
         matches.append(
             {
                 "id": match.id,
+                "display_id": f"#{disp_num}",
                 "mode": match.mode,
+                "mode_label": _mode_label(match.mode),
                 "status": match.status,
                 "starter": _resolve_display_name(
                     discord_id=match.starter_discord_id,
@@ -176,7 +233,6 @@ def list_bluewar_matches(
                 "finished_at": fmt_kst(match.finished_at, "%Y-%m-%d %H:%M:%S"),
                 "created_at": fmt_kst(match.created_at, "%Y-%m-%d %H:%M:%S"),
                 "pcount": int(pcount),
-                "note": match.note,
             }
         )
 
@@ -218,6 +274,39 @@ def bluewar_match_detail(
         .order_by(models.BlueWarParticipant.side.asc())
         .all()
     )
+
+    # 표시용: 모드별 시퀀스 번호 및 ID 표기
+    seq_subq = (
+        db.query(
+            models.BlueWarMatch.id.label("id"),
+            models.BlueWarMatch.mode.label("mode"),
+            func.row_number()
+            .over(
+                partition_by=models.BlueWarMatch.mode,
+                order_by=models.BlueWarMatch.id.asc(),
+            )
+            .label("seq"),
+        )
+    ).subquery()
+    seq = (
+        db.query(seq_subq.c.seq)
+        .filter(seq_subq.c.id == int(match.id))
+        .scalar()
+    )
+    seq_i = int(seq) if seq is not None else int(match.id)
+    display_id = f"#{_display_id_number(match.mode, seq_i)}"
+
+    # 연습 모드라면 AI/난이도 표시를 위해 참가자에서 ai_name 추정
+    ai_label: Optional[str] = None
+    if (match.mode or "").strip().lower() == "practice":
+        for p in participants:
+            if p.ai_name:
+                ai_label = p.ai_name
+                break
+            if p.name:
+                ai_label = p.name
+                break
+    mode_label = _mode_label(match.mode, ai_label=ai_label)
 
     # discord_id -> 표시 이름 매핑 (users 테이블 우선)
     discord_ids: Set[str] = set()
@@ -263,6 +352,8 @@ def bluewar_match_detail(
             "match": match,
             "participants": view_parts,
             "is_admin": is_admin,
+            "display_id": display_id,
+            "mode_label": mode_label,
             "started_at": fmt_kst(match.started_at, "%Y-%m-%d %H:%M:%S"),
             "finished_at": fmt_kst(match.finished_at, "%Y-%m-%d %H:%M:%S"),
             "error": None,
