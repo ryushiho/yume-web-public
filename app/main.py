@@ -1,8 +1,9 @@
 # app/main.py
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import RedirectResponse
 
 from config import settings
 from app.routers import auth, dashboard, records, users, api_bluewar, ranking, bluewar, home, member, admin_members
@@ -32,6 +33,47 @@ app = FastAPI(
 # 세션 미들웨어 (로그인 상태용)
 # - public repo에서는 하드코딩을 피하기 위해 env 기반으로 설정한다.
 app.add_middleware(SessionMiddleware, secret_key=settings.SESSION_SECRET)
+
+
+# ============================
+#   로그인 전 UI 잠금
+# ============================
+#
+# 운영 요구사항:
+# - 로그인하지 않은 사용자는 "로그인 화면" 이외의 UI를 보지 못하게 한다.
+# - 단, 디스코드 봇 연동(/bluewar/*) 및 단어장 API(/api/*)는 세션이 없어도
+#   토큰/권한으로 동작해야 하므로 여기서 막지 않는다.
+
+
+@app.middleware("http")
+async def require_login_for_ui(request: Request, call_next):
+    path = request.url.path or "/"
+
+    # 1) 정적/공개 API/봇 연동은 예외
+    if (
+        path.startswith("/static")
+        or path.startswith("/api")
+        or path.startswith("/bluewar")
+        or path.startswith("/favicon")
+        or path.startswith("/robots.txt")
+    ):
+        return await call_next(request)
+
+    # 2) 로그인/회원가입/관리자 로그인 화면은 예외
+    if (
+        path.startswith("/member/login")
+        or path.startswith("/member/register")
+        or path.startswith("/auth/login")
+        or path.startswith("/member/logout")
+        or path.startswith("/auth/logout")
+    ):
+        return await call_next(request)
+
+    # 3) 그 외는 로그인 강제
+    if not request.session.get("user") and not request.session.get("member"):
+        return RedirectResponse(url="/member/login", status_code=303)
+
+    return await call_next(request)
 
 # 정적 파일 (CSS, JS)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

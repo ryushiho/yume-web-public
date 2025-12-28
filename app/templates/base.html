@@ -35,6 +35,15 @@
             min-height: 100vh;
         }
 
+        /* 로그인 전에는 사이드바/상단바를 숨기고, 화면을 깔끔하게 중앙 정렬 */
+        .layout.unauth .sidebar { display: none; }
+        .layout.unauth .topbar { display: none; }
+        .layout.unauth .content-inner {
+            max-width: 980px;
+            padding-top: 4.25rem;
+            margin: 0 auto;
+        }
+
         .sidebar {
             width: 240px;
             background: rgba(17, 17, 34, 0.85);
@@ -257,76 +266,71 @@
 {% set member_user = request.session.get("member") %}
 {% set is_member = (member_user is not none) %}
 {% set is_admin = (admin_user is not none) or (member_user and member_user.get("is_admin")) %}
+{% set is_authenticated = is_admin or is_member %}
 
 {# 세션의 로그인 유저는 session_user 라는 이름으로만 사용 #}
 {% set session_user = request.session.get("user") %}
-<div class="layout">
+
+<div class="layout{% if not is_authenticated %} unauth{% endif %}">
     <aside class="sidebar">
         <div class="sidebar-title">Yume Web</div>
 
-        <div class="nav-section-title">메인</div>
-        <a href="/" class="nav-link">홈</a>
+        {% if is_authenticated %}
+            <div class="nav-section-title">메인</div>
+            <a href="/" class="nav-link">홈</a>
 
-        {% if is_admin %}
-            <a href="/dashboard/" class="nav-link">관리 대시보드</a>
-        {% elif is_member %}
-            <a href="/member/dashboard" class="nav-link">내 대시보드</a>
-        {% else %}
-            <a href="/member/login" class="nav-link">로그인</a>
-            <a href="/member/register" class="nav-link">회원가입</a>
-        {% endif %}
+            {% if is_admin %}
+                <a href="/dashboard/" class="nav-link">관리 대시보드</a>
+            {% elif is_member %}
+                <a href="/member/dashboard" class="nav-link">내 대시보드</a>
+            {% endif %}
 
-        <div class="nav-section-title">블루전</div>
-        <a href="/words/" class="nav-link">단어 보기</a>
-        {% if is_admin or is_member %}
+            <div class="nav-section-title">블루전</div>
+            <a href="/words/" class="nav-link">단어 보기</a>
             <a href="/bluewar/matches/" class="nav-link">매치 목록</a>
             <a href="/ranking/" class="nav-link">랭킹</a>
-        {% else %}
-            <a href="/member/login" class="nav-link">매치 목록 (로그인 필요)</a>
-        {% endif %}
 
-        {% if is_admin %}
-            <div class="nav-section-title">관리</div>
-            <a href="/records/" class="nav-link">블루전 전적</a>
-            <a href="/users/" class="nav-link">유저 관리</a>
-            <a href="/admin/members/" class="nav-link">회원/권한</a>
-            <a href="/admin/wordlists/" class="nav-link">단어 DB</a>
+            {% if is_admin %}
+                <div class="nav-section-title">관리</div>
+                <a href="/records/" class="nav-link">블루전 전적</a>
+                <a href="/users/" class="nav-link">유저 관리</a>
+                <a href="/admin/members/" class="nav-link">회원/권한</a>
+                <a href="/admin/wordlists/" class="nav-link">단어 DB</a>
+            {% endif %}
         {% endif %}
     </aside>
 
     <div class="content">
-        <header class="topbar">
-            <div class="topbar-title">
-                {% block header_title %}{% endblock %}
-            </div>
-            <div class="topbar-right">
-                {% if is_admin %}
-                    {% set display_name =
-                        (admin_user.username if admin_user.username is defined and admin_user.username else
-                         admin_user.id if admin_user.id is defined and admin_user.id else
-                         "관리자")
-                    %}
-                    <span style="font-size:0.85rem; color:#9ca3af; margin-right:0.5rem;">
-                        {{ display_name }} 님
-                    </span>
-                    <a href="/auth/logout">로그아웃</a>
-                {% elif is_member %}
-                    {% set display_name =
-                        (member_user.nickname if member_user.nickname is defined and member_user.nickname else
-                         member_user.id if member_user.id is defined and member_user.id else
-                         "회원")
-                    %}
-                    <span style="font-size:0.85rem; color:#9ca3af; margin-right:0.5rem;">
-                        {{ display_name }} 님
-                    </span>
-                    <a href="/member/logout">로그아웃</a>
-                {% else %}
-                    <a href="/member/login">로그인</a>
-                    <a href="/member/register" style="margin-left:0.5rem;">회원가입</a>
-                    <a href="/auth/login" style="margin-left:0.5rem;">관리자</a>
-                {% endif %}
-            </div>
-        </header>
+        {% if is_authenticated %}
+            <header class="topbar">
+                <div class="topbar-title">
+                    {% block header_title %}{% endblock %}
+                </div>
+                <div class="topbar-right">
+                    {% if is_admin %}
+                        {% set display_name =
+                            (admin_user.username if admin_user.username is defined and admin_user.username else
+                             admin_user.id if admin_user.id is defined and admin_user.id else
+                             "관리자")
+                        %}
+                        <span style="font-size:0.85rem; color:#9ca3af; margin-right:0.5rem;">
+                            {{ display_name }} 님
+                        </span>
+                        <a href="/auth/logout">로그아웃</a>
+                    {% elif is_member %}
+                        {% set display_name =
+                            (member_user.nickname if member_user.nickname is defined and member_user.nickname else
+                             member_user.id if member_user.id is defined and member_user.id else
+                             "회원")
+                        %}
+                        <span style="font-size:0.85rem; color:#9ca3af; margin-right:0.5rem;">
+                            {{ display_name }} 님
+                        </span>
+                        <a href="/member/logout">로그아웃</a>
+                    {% endif %}
+                </div>
+            </header>
+        {% endif %}
 
         <main class="content-inner">
             {% block content %}{% endblock %}
