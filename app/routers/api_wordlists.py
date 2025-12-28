@@ -6,8 +6,9 @@ import hashlib
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status, Body
 from fastapi.responses import PlainTextResponse, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -69,6 +70,25 @@ def _parse_txt(text: str) -> List[str]:
     return out
 
 
+def _clean_word(word: Optional[str]) -> str:
+    """단어 입력값 검증/정규화.
+
+    - 앞뒤 공백 제거
+    - 빈 문자열 금지
+    - 길이 제한(모델 컬럼 길이와 맞춤)
+    - 내부 공백/탭 금지(끝말잇기 단어 호환)
+    """
+    w = (word or "").strip()
+    if not w:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="empty word")
+    if len(w) > 200:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="word too long")
+    if any(ch.isspace() for ch in w):
+        # strip 이후에도 남은 공백/탭/개행은 허용하지 않는다.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="whitespace not allowed")
+    return w
+
+
 def _upsert_wordlist_overwrite(db: Session, list_name: str, words: List[str]) -> None:
     """해당 리스트를 완전히 교체한다(덮어쓰기)."""
     db.query(models.BlueWarWord).filter(models.BlueWarWord.list_name == list_name).delete()
@@ -77,6 +97,109 @@ def _upsert_wordlist_overwrite(db: Session, list_name: str, words: List[str]) ->
     if rows:
         db.bulk_save_objects(rows)
     db.commit()
+
+
+@router.post("/{list_name}/words")
+def word_add(
+    list_name: str,
+    data: Dict[str, str] = Body(...),
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_admin_user_api),
+) -> Dict[str, object]:
+    """관리자 전용: 단어 1개 추가."""
+    name = _assert_list_name(list_name)
+    w = _clean_word((data or {}).get("word", ""))
+    row = models.BlueWarWord(list_name=name, word=w)
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="duplicate")
+    db.refresh(row)
+    return {"id": int(row.id), "list_name": name, "word": row.word}
+
+
+@router.patch("/{list_name}/words/{word_id}")
+def word_update(
+    list_name: str,
+    word_id: int,
+    data: Dict[str, str] = Body(...),
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_admin_user_api),
+) -> Dict[str, object]:
+    """관리자 전용: 단어 1개 수정."""
+    name = _assert_list_name(list_name)
+    row = (
+        db.query(models.BlueWarWord)
+        .filter(models.BlueWarWord.list_name == name)
+        .filter(models.BlueWarWord.id == int(word_id))
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="not found")
+    w = _clean_word((data or {}).get("word", ""))
+    row.word = w
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="duplicate")
+    db.refresh(row)
+    return {"id": int(row.id), "list_name": name, "word": row.word}
+
+
+@router.delete("/{list_name}/words/{word_id}")
+def word_delete(
+    list_name: str,
+    word_id: int,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_admin_user_api),
+) -> Dict[str, object]:
+    """관리자 전용: 단어 1개 삭제."""
+    name = _assert_list_name(list_name)
+    row = (
+        db.query(models.BlueWarWord)
+        .filter(models.BlueWarWord.list_name == name)
+        .filter(models.BlueWarWord.id == int(word_id))
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="not found")
+    db.delete(row)
+    db.commit()
+    return {"deleted": 1, "id": int(word_id), "list_name": name}
+
+
+@router.post("/{list_name}/words/bulk_delete")
+def word_bulk_delete(
+    list_name: str,
+    data: Dict[str, List[int]] = Body(...),
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_admin_user_api),
+) -> Dict[str, object]:
+    """관리자 전용: 여러 단어 삭제.
+
+    body 예)
+      {"ids": [1,2,3]}
+    """
+    name = _assert_list_name(list_name)
+    ids = (data or {}).get("ids") or []
+    ids = [int(x) for x in ids if str(x).strip().isdigit()]
+    # 안전장치: 한 번에 너무 많이 지우는 실수 방지
+    if len(ids) > 5000:
+        raise HTTPException(status_code=400, detail="too many ids")
+    if not ids:
+        return {"deleted": 0, "list_name": name}
+
+    deleted = (
+        db.query(models.BlueWarWord)
+        .filter(models.BlueWarWord.list_name == name)
+        .filter(models.BlueWarWord.id.in_(ids))
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"deleted": int(deleted), "list_name": name}
 
 
 @router.get("/meta")

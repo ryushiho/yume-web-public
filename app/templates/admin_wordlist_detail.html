@@ -34,6 +34,11 @@
         {% if error == 'encoding' %}UTF-8(.txt)로 저장한 파일을 업로드해줘.{% endif %}
         {% if error == 'empty' %}빈 파일이야.{% endif %}
         {% if error == 'toolarge' %}파일이 너무 커(5MB 제한).{% endif %}
+        {% if error == 'dup' %}이미 있는 단어야(중복).{% endif %}
+        {% if error == 'whitespace' %}공백/탭이 포함된 단어는 허용하지 않아.{% endif %}
+        {% if error == 'toolong' %}단어가 너무 길어(최대 200자).{% endif %}
+        {% if error == 'invalid' %}요청 값이 올바르지 않아.{% endif %}
+        {% if error == 'notfound' %}대상을 찾지 못했어.{% endif %}
       </div>
     </div>
   {% endif %}
@@ -69,31 +74,62 @@
       </div>
     </form>
 
-    <div style="margin-top:0.9rem; overflow-x:auto;">
+    <div style="margin-top:0.9rem; padding:0.9rem; border:1px solid #1f2937; border-radius:0.7rem; background:#070d18;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:0.8rem; flex-wrap:wrap;">
+        <div style="font-weight:700;">단어 추가</div>
+        <div style="color:#9ca3af; font-size:0.85rem;">앞뒤 공백 자동 제거 · 중복 금지</div>
+      </div>
+      <form method="post" action="/admin/wordlists/{{ list_name }}/add" style="margin-top:0.6rem; display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+        <input type="hidden" name="next" value="{{ current_url }}" />
+        <input type="text" name="word" placeholder="추가할 단어" required
+               style="min-width:240px; padding:0.45rem 0.6rem; border-radius:0.5rem; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb;" />
+        <button type="submit" class="btn btn-primary">추가</button>
+      </form>
+    </div>
+
+    <form method="post" action="/admin/wordlists/{{ list_name }}/delete" style="margin-top:0.9rem;">
+      <input type="hidden" name="next" value="{{ current_url }}" />
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:0.8rem; flex-wrap:wrap;">
+        <div style="color:#9ca3af; font-size:0.85rem;">체크한 단어를 한 번에 삭제할 수 있어.</div>
+        <button type="submit" class="btn btn-danger" onclick="return confirm('선택한 단어를 삭제할까?');">선택 삭제</button>
+      </div>
+
+      <div style="margin-top:0.7rem; overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse;">
         <thead>
           <tr style="text-align:left; border-bottom:1px solid #1f2937;">
+            <th style="padding:0.4rem 0.3rem; width:50px; color:#9ca3af; font-weight:600;">선택</th>
             <th style="padding:0.4rem 0.3rem; width:90px; color:#9ca3af; font-weight:600;">#</th>
             <th style="padding:0.4rem 0.3rem; color:#9ca3af; font-weight:600;">단어</th>
+            <th style="padding:0.4rem 0.3rem; width:180px; color:#9ca3af; font-weight:600;">작업</th>
             <th style="padding:0.4rem 0.3rem; width:120px; color:#9ca3af; font-weight:600;">ID</th>
           </tr>
         </thead>
         <tbody>
           {% for row in rows %}
             <tr style="border-bottom:1px solid #111827;">
+              <td style="padding:0.35rem 0.3rem; color:#9ca3af;">
+                <input type="checkbox" name="ids" value="{{ row.id }}" />
+              </td>
               <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{{ offset + loop.index }}</td>
               <td style="padding:0.35rem 0.3rem;">{{ row.word }}</td>
+              <td style="padding:0.35rem 0.3rem; display:flex; gap:0.35rem; flex-wrap:wrap;">
+                <a class="btn btn-secondary" href="/admin/wordlists/{{ list_name }}/edit/{{ row.id }}?next={{ current_url | urlencode }}">수정</a>
+                <button type="submit" class="btn btn-danger" name="single_id" value="{{ row.id }}" onclick="return confirm('이 단어를 삭제할까?');">삭제</button>
+              </td>
               <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{{ row.id }}</td>
             </tr>
           {% endfor %}
           {% if rows|length == 0 %}
             <tr>
-              <td colspan="3" style="padding:0.6rem 0.3rem; color:#9ca3af;">결과가 없어.</td>
+              <td colspan="5" style="padding:0.6rem 0.3rem; color:#9ca3af;">결과가 없어.</td>
             </tr>
           {% endif %}
         </tbody>
       </table>
     </div>
+
+    </form>
 
     <div style="display:flex; align-items:center; justify-content:space-between; gap:0.8rem; flex-wrap:wrap; margin-top:0.9rem;">
       <div style="display:flex; gap:0.4rem;">

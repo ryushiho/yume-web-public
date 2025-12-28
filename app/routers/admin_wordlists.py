@@ -5,9 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from urllib.parse import urlencode, quote
+
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -20,6 +23,7 @@ from app.routers.api_wordlists import (
     _parse_txt,
     _sha256,
     _upsert_wordlist_overwrite,
+    _clean_word,
 )
 
 
@@ -53,6 +57,28 @@ def _safe_int(v: Optional[str], default: int) -> int:
         return int(str(v).strip())
     except Exception:
         return default
+
+
+def _clean_word_form(word: Optional[str]) -> str:
+    """관리자 폼 입력용 단어 검증/정규화."""
+    w = (word or "").strip()
+    if not w:
+        raise ValueError("empty")
+    if len(w) > 200:
+        raise ValueError("toolong")
+    if any(ch.isspace() for ch in w):
+        raise ValueError("whitespace")
+    return w
+
+
+def _safe_next_url(next_url: str) -> str:
+    """open redirect 방지: 내부 경로만 허용."""
+    u = (next_url or "").strip()
+    if not u:
+        return ""
+    if u.startswith("/admin/wordlists"):
+        return u
+    return ""
 
 
 @router.get("/")
@@ -126,6 +152,9 @@ def admin_wordlist_detail(
         .all()
     )
 
+    # 현재 목록 URL(액션 후 복귀용)
+    current_url = f"/admin/wordlists/{name}?" + urlencode({"q": q, "page": page, "page_size": page_size})
+
     return templates.TemplateResponse(
         "admin_wordlist_detail.html",
         {
@@ -139,6 +168,7 @@ def admin_wordlist_detail(
             "total_pages": total_pages,
             "rows": rows,
             "offset": offset,
+            "current_url": current_url,
             "ok": ok,
             "error": error,
         },
@@ -198,3 +228,191 @@ async def admin_wordlists_upload(
         sep = "&" if "?" in next_url else "?"
         return _redir(url=f"{next_url}{sep}ok=1")
     return _redir(url=f"/admin/wordlists/?ok=1&which={name}")
+
+
+@router.post("/{list_name}/add")
+async def admin_word_add(
+    request: Request,
+    list_name: str,
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    """관리자 UI: 단어 1개 추가."""
+    form = await request.form()
+    next_url = _safe_next_url(str(form.get("next") or ""))
+    if not next_url:
+        next_url = f"/admin/wordlists/{list_name}"
+
+    def _redir(err: str = "", ok: bool = False) -> RedirectResponse:
+        sep = "&" if "?" in next_url else "?"
+        if ok:
+            return RedirectResponse(url=f"{next_url}{sep}ok=1", status_code=303)
+        return RedirectResponse(url=f"{next_url}{sep}error={err}", status_code=303)
+
+    try:
+        name = _assert_list_name(list_name)
+    except HTTPException:
+        return RedirectResponse(url="/admin/wordlists/?error=unknown&which=" + str(list_name), status_code=303)
+
+    try:
+        w = _clean_word_form(str(form.get("word") or ""))
+    except ValueError as e:
+        return _redir(err=str(e))
+
+    row = models.BlueWarWord(list_name=name, word=w)
+    db.add(row)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return _redir(err="dup")
+    return _redir(ok=True)
+
+
+@router.post("/{list_name}/delete")
+async def admin_word_delete(
+    request: Request,
+    list_name: str,
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    """관리자 UI: 단일/선택 삭제.
+
+    - single_id가 오면 그 1개만 삭제
+    - ids[]가 오면 선택 삭제
+    """
+    form = await request.form()
+    next_url = _safe_next_url(str(form.get("next") or ""))
+    if not next_url:
+        next_url = f"/admin/wordlists/{list_name}"
+
+    def _redir(err: str = "", ok: bool = False) -> RedirectResponse:
+        sep = "&" if "?" in next_url else "?"
+        if ok:
+            return RedirectResponse(url=f"{next_url}{sep}ok=1", status_code=303)
+        return RedirectResponse(url=f"{next_url}{sep}error={err}", status_code=303)
+
+    try:
+        name = _assert_list_name(list_name)
+    except HTTPException:
+        return RedirectResponse(url="/admin/wordlists/?error=unknown&which=" + str(list_name), status_code=303)
+
+    single_id = (form.get("single_id") or "").strip()
+    ids = form.getlist("ids") if hasattr(form, "getlist") else []
+
+    try:
+        if single_id:
+            target_ids = [int(single_id)]
+        else:
+            target_ids = [int(x) for x in ids if str(x).strip().isdigit()]
+    except Exception:
+        return _redir(err="invalid")
+
+    if not target_ids:
+        return _redir(err="empty")
+    if len(target_ids) > 5000:
+        return _redir(err="toolarge")
+
+    deleted = (
+        db.query(models.BlueWarWord)
+        .filter(models.BlueWarWord.list_name == name)
+        .filter(models.BlueWarWord.id.in_(target_ids))
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    if int(deleted) <= 0:
+        return _redir(err="notfound")
+    return _redir(ok=True)
+
+
+@router.get("/{list_name}/edit/{word_id}")
+def admin_word_edit_page(
+    request: Request,
+    list_name: str,
+    word_id: int,
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    """관리자 UI: 단어 수정 페이지."""
+    try:
+        name = _assert_list_name(list_name)
+    except HTTPException:
+        return RedirectResponse(url="/admin/wordlists/?error=unknown&which=" + str(list_name), status_code=303)
+
+    next_url = _safe_next_url(str(request.query_params.get("next") or ""))
+    if not next_url:
+        next_url = f"/admin/wordlists/{name}"
+
+    row = (
+        db.query(models.BlueWarWord)
+        .filter(models.BlueWarWord.list_name == name)
+        .filter(models.BlueWarWord.id == int(word_id))
+        .first()
+    )
+    if not row:
+        sep = "&" if "?" in next_url else "?"
+        return RedirectResponse(url=f"{next_url}{sep}error=notfound", status_code=303)
+
+    error = request.query_params.get("error")
+    return templates.TemplateResponse(
+        "admin_wordlist_edit.html",
+        {
+            "request": request,
+            "list_name": name,
+            "word_id": int(word_id),
+            "word": row.word,
+            "next_url": next_url,
+            "error": error,
+        },
+    )
+
+
+@router.post("/{list_name}/edit/{word_id}")
+async def admin_word_edit_submit(
+    request: Request,
+    list_name: str,
+    word_id: int,
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    """관리자 UI: 단어 수정 처리."""
+    form = await request.form()
+    next_url = _safe_next_url(str(form.get("next") or ""))
+    if not next_url:
+        next_url = f"/admin/wordlists/{list_name}"
+
+    try:
+        name = _assert_list_name(list_name)
+    except HTTPException:
+        return RedirectResponse(url="/admin/wordlists/?error=unknown&which=" + str(list_name), status_code=303)
+
+    row = (
+        db.query(models.BlueWarWord)
+        .filter(models.BlueWarWord.list_name == name)
+        .filter(models.BlueWarWord.id == int(word_id))
+        .first()
+    )
+    if not row:
+        sep = "&" if "?" in next_url else "?"
+        return RedirectResponse(url=f"{next_url}{sep}error=notfound", status_code=303)
+
+    try:
+        w = _clean_word_form(str(form.get("word") or ""))
+    except ValueError as e:
+        return RedirectResponse(
+            url=f"/admin/wordlists/{name}/edit/{int(word_id)}?next={quote(next_url, safe='')}&error={str(e)}",
+            status_code=303,
+        )
+
+    row.word = w
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/admin/wordlists/{name}/edit/{int(word_id)}?next={quote(next_url, safe='')}&error=dup",
+            status_code=303,
+        )
+
+    sep = "&" if "?" in next_url else "?"
+    return RedirectResponse(url=f"{next_url}{sep}ok=1", status_code=303)

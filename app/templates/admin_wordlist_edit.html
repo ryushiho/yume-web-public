@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}단어 수정 - {{ list_name }}{% endblock %}
+{% block header_title %}단어 DB{% endblock %}
+
+{% block content %}
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+    <div>
+      <h1 style="margin-bottom:0.25rem;">단어 수정</h1>
+      <div style="color:#9ca3af; font-size:0.9rem;">
+        리스트: <code style="color:#e5e7eb;">{{ list_name }}</code> · ID: <code style="color:#e5e7eb;">{{ word_id }}</code>
+      </div>
+    </div>
+    <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
+      <a class="btn btn-secondary" href="{{ next_url }}">돌아가기</a>
+    </div>
+  </div>
+
+  {% if error %}
+    <div style="padding:0.6rem 0.8rem; background:#3a0b0b; border:1px solid #7f1d1d; border-radius:0.5rem; margin:1rem 0;">
+      ❌ 오류: {{ error }}
+      <div style="color:#9ca3af; font-size:0.85rem; margin-top:0.3rem;">
+        {% if error == 'dup' %}이미 있는 단어야(중복).{% endif %}
+        {% if error == 'empty' %}단어가 비어 있어.{% endif %}
+        {% if error == 'whitespace' %}공백/탭이 포함된 단어는 허용하지 않아.{% endif %}
+        {% if error == 'toolong' %}단어가 너무 길어(최대 200자).{% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220; margin-top:1rem;">
+    <div style="color:#9ca3af; font-size:0.85rem; margin-bottom:0.6rem;">
+      기존 단어: <code style="color:#e5e7eb;">{{ word }}</code>
+    </div>
+
+    <form method="post" action="/admin/wordlists/{{ list_name }}/edit/{{ word_id }}">
+      <input type="hidden" name="next" value="{{ next_url }}" />
+      <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+        <input type="text" name="word" value="{{ word }}" required
+               style="min-width:260px; padding:0.45rem 0.6rem; border-radius:0.5rem; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb;" />
+        <button type="submit" class="btn btn-primary">저장</button>
+        <a class="btn btn-secondary" href="{{ next_url }}">취소</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
