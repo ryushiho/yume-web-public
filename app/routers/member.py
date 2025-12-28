@@ -26,9 +26,12 @@ templates = Jinja2Templates(directory="app/templates")
 def _sync_member_admin_flag(db: Session, m: models.MemberUser) -> None:
     """환경설정 기반으로 회원 관리자 권한을 부여한다(필요 시 DB 반영)."""
     should_admin = False
-    if settings.BOOTSTRAP_ADMIN_DISCORD_ID and (m.discord_id == settings.BOOTSTRAP_ADMIN_DISCORD_ID):
+    # ✅ 회원 가입/로그인 아이디 기준으로 관리자 권한을 부여한다.
+    # - settings.ADMIN_MEMBER_IDS / settings.BOOTSTRAP_ADMIN_MEMBER_ID
+    # - (구) 디스코드 ID 기반 env는 config.py에서 호환 처리로 같이 읽는다.
+    if getattr(settings, "BOOTSTRAP_ADMIN_MEMBER_ID", "") and (m.discord_id == settings.BOOTSTRAP_ADMIN_MEMBER_ID):
         should_admin = True
-    if m.discord_id in getattr(settings, "ADMIN_DISCORD_IDS", set()):
+    if m.discord_id in getattr(settings, "ADMIN_MEMBER_IDS", set()):
         should_admin = True
 
     if should_admin and (not getattr(m, "is_admin", False)):

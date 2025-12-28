@@ -32,10 +32,10 @@ def set_admin(
     request: Request,
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin_user),
-    discord_id: str = Form(...),
+    login_id: str = Form(...),
     make_admin: str = Form("1"),
 ):
-    target = db.query(models.MemberUser).filter(models.MemberUser.discord_id == discord_id).first()
+    target = db.query(models.MemberUser).filter(models.MemberUser.discord_id == login_id).first()
     if target:
         target.is_admin = (make_admin == "1")
         db.commit()

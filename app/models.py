@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -179,5 +180,28 @@ class AppMeta(Base):
 
     key = Column(String(100), primary_key=True)
     value = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BlueWarWord(Base):
+    """블루전 단어 리스트(웹에서 관리).
+
+    - list_name: "suggestion" | "blue_archive_words" (파일명 기준)
+    - word: 단어(1줄 1단어)
+
+    Phase 1에서는 읽기 API(/api/bluewar/wordlists/*.txt) 제공을 위해 도입.
+    이후 Phase 2~에서 업로드/CRUD UI로 확장.
+    """
+
+    __tablename__ = "bluewar_words"
+    __table_args__ = (
+        UniqueConstraint("list_name", "word", name="uq_bluewar_words_list_word"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    list_name = Column(String(50), nullable=False, index=True)
+    word = Column(String(200), nullable=False, index=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

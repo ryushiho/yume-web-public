@@ -38,12 +38,24 @@ class Settings:
         #   PW: miyo
         self.ADMIN_USERS: Dict[str, str] = {"시호": "miyo"}
 
-        # 회원(Member) 계정 중 관리자 권한을 부여할 디스코드 ID 목록(쉼표로 구분)
-        raw_ids = os.getenv("YUME_ADMIN_DISCORD_IDS", "").strip()
-        self.ADMIN_DISCORD_IDS = {x.strip() for x in raw_ids.split(",") if x.strip()}
+        # 회원(MemberUser) 계정 중 "관리 페이지 접근" 권한을 부여할 로그인 아이디 목록(쉼표 구분)
+        #
+        # ✅ 변경 이유:
+        # - 회원 가입이 "아이디/비밀번호" 방식인데,
+        #   관리자 권한 부여 기준이 '디스코드 ID'로 되어 있으면 운영이 헷갈린다.
+        # - 그래서 이제는 "회원 로그인 아이디"(member register/login에서 입력하는 아이디) 기준으로 부여한다.
+        #
+        # 호환성:
+        # - 기존 .env의 YUME_ADMIN_DISCORD_IDS / YUME_BOOTSTRAP_ADMIN_DISCORD_ID 도 그대로 읽는다.
+        raw_ids = (os.getenv("YUME_ADMIN_MEMBER_IDS") or os.getenv("YUME_ADMIN_DISCORD_IDS") or "").strip()
+        self.ADMIN_MEMBER_IDS = {x.strip() for x in raw_ids.split(",") if x.strip()}
 
-        # 부트스트랩(초기 1인) 관리자 디스코드 ID (선택)
-        self.BOOTSTRAP_ADMIN_DISCORD_ID = os.getenv("YUME_BOOTSTRAP_ADMIN_DISCORD_ID", "1433962010785349634").strip()
+        # 부트스트랩(초기 1인) 관리자 로그인 아이디(선택)
+        self.BOOTSTRAP_ADMIN_MEMBER_ID = (
+            os.getenv("YUME_BOOTSTRAP_ADMIN_MEMBER_ID")
+            or os.getenv("YUME_BOOTSTRAP_ADMIN_DISCORD_ID")
+            or ""
+        ).strip()
 
 
 # 전역 settings 인스턴스

@@ -6,6 +6,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from config import settings
 from app.routers import auth, dashboard, records, users, api_bluewar, ranking, bluewar, home, member, admin_members
+from app.routers import api_wordlists
 from app.database import Base, engine
 from app.database import SessionLocal
 from app.schema import ensure_sqlite_schema
@@ -41,6 +42,7 @@ app.include_router(records.router)
 app.include_router(bluewar.router)
 app.include_router(users.router)
 app.include_router(api_bluewar.router)
+app.include_router(api_wordlists.router)
 app.include_router(ranking.router)
 app.include_router(admin_members.router)
 
@@ -53,16 +55,28 @@ def _startup_seed_import() -> None:
     try:
         ensure_blue_records_seed(db)
 
-        # ✅ 요청사항: 멤버 로그인 아이디를 "디스코드 ID" 강제에서 해제하고,
-        #    관리자 계정 1개만 유지 (ID: 시호, PW: miyo) - 1회성 부트스트랩
-        bootstrap_key = "member_bootstrap_admin_v1"
-        meta = db.query(models.AppMeta).filter(models.AppMeta.key == bootstrap_key).first()
-        if not meta:
-            # 기존 계정 전부 정리
-            db.query(models.MemberUser).delete()
-            db.commit()
+        # ✅ 회원 관리자 권한 부트스트랩(안전한 방식)
+        # - 더 이상 회원 테이블을 통째로 삭제하지 않는다.
+        # - (선택) .env의 YUME_BOOTSTRAP_ADMIN_MEMBER_ID 로 지정된 '회원 아이디'가 있으면
+        #   그 계정을 관리자(is_admin=True)로 올려 준다.
+        # - 아무 계정도 없을 때만, 최소 1개의 초기 관리자(시호/miyo)를 생성한다.
 
-            # 관리자 1개 생성
+        # 1) 부트스트랩 아이디가 지정된 경우: 해당 회원을 admin으로 승격(존재하면)
+        bootstrap_id = getattr(settings, "BOOTSTRAP_ADMIN_MEMBER_ID", "").strip()
+        if bootstrap_id:
+            target = (
+                db.query(models.MemberUser)
+                .filter(models.MemberUser.discord_id == bootstrap_id)
+                .first()
+            )
+            if target and not target.is_admin:
+                target.is_admin = True
+                db.add(target)
+                db.commit()
+
+        # 2) 회원이 아예 없는 경우: 초기 관리자 1개만 생성(운영에서 바로 교체 권장)
+        any_member = db.query(models.MemberUser).first()
+        if not any_member:
             admin_id = "시호"
             admin_pw = "miyo"
             m = models.MemberUser(
@@ -73,7 +87,6 @@ def _startup_seed_import() -> None:
                 is_admin=True,
             )
             db.add(m)
-            db.add(models.AppMeta(key=bootstrap_key, value="done"))
             db.commit()
     finally:
         db.close()

@@ -8,7 +8,7 @@
   <p style="color:#9ca3af;">회원 계정에 관리자 권한을 부여/회수할 수 있어.</p>
 
   <form method="post" action="/admin/members/set-admin" style="margin: 1rem 0; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-    <input name="discord_id" placeholder="디스코드 ID" required style="padding:0.6rem; border-radius:0.5rem; border:1px solid #334155; background:#0b1220; color:#e5e7eb;">
+    <input name="login_id" placeholder="회원 아이디(로그인 아이디)" required style="padding:0.6rem; border-radius:0.5rem; border:1px solid #334155; background:#0b1220; color:#e5e7eb;">
     <select name="make_admin" style="padding:0.6rem; border-radius:0.5rem; border:1px solid #334155; background:#0b1220; color:#e5e7eb;">
       <option value="1">관리자로 지정</option>
       <option value="0">관리자 해제</option>
@@ -19,7 +19,7 @@
   <table class="table">
     <thead>
       <tr>
-        <th>discord_id</th>
+        <th>아이디</th>
         <th>닉네임</th>
         <th>관리자</th>
         <th>활성</th>
