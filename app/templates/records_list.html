@@ -40,8 +40,8 @@
         {% for row in rows %}
         {% set m = row.match %}
         <tr>
-            <td>{{ m.id }}</td>
-            <td>{{ m.mode }}</td>
+            <td>{{ row.display_id }}</td>
+            <td>{{ row.mode_label }}</td>
             <td>{{ m.status }}</td>
             <td>
                 {{ row.starter_name }}

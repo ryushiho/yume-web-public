@@ -12,7 +12,6 @@
         · 단어 수: <b>{{ meta.count }}</b>
         · 버전: <b>{{ meta.version }}</b>
         {% if meta.updated_at %}· 최근 수정: {{ meta.updated_at }}{% endif %}
-        {% if meta.sha256 %}<br/>sha256: <code style="color:#e5e7eb;">{{ meta.sha256 }}</code>{% endif %}
       </div>
     </div>
     <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
@@ -37,7 +36,6 @@
             <th style="padding:0.4rem 0.3rem; width:210px; color:#9ca3af; font-weight:600;">시각</th>
             <th style="padding:0.4rem 0.3rem; width:180px; color:#9ca3af; font-weight:600;">수정자</th>
             <th style="padding:0.4rem 0.3rem; width:90px; color:#9ca3af; font-weight:600;">개수</th>
-            <th style="padding:0.4rem 0.3rem; width:170px; color:#9ca3af; font-weight:600;">sha256</th>
             <th style="padding:0.4rem 0.3rem; color:#9ca3af; font-weight:600;">메모</th>
             <th style="padding:0.4rem 0.3rem; width:120px; color:#9ca3af; font-weight:600;">작업</th>
           </tr>
@@ -50,7 +48,6 @@
               <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{% if v.created_at %}{{ v.created_at }}{% endif %}</td>
               <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{{ v.created_by }}{% if v.created_by_name %} ({{ v.created_by_name }}){% endif %}</td>
               <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{{ v.count }}</td>
-              <td style="padding:0.35rem 0.3rem; color:#9ca3af;"><code style="color:#e5e7eb;">{{ v.sha256[:12] }}…</code></td>
               <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{{ v.note }}</td>
               <td style="padding:0.35rem 0.3rem;">
                 <form method="post" action="/admin/wordlists/{{ list_name }}/rollback/{{ v.version }}" style="margin:0;">
@@ -62,7 +59,7 @@
           {% endfor %}
           {% if versions|length == 0 %}
             <tr>
-              <td colspan="8" style="padding:0.6rem 0.3rem; color:#9ca3af;">버전 기록이 없어.</td>
+              <td colspan="7" style="padding:0.6rem 0.3rem; color:#9ca3af;">버전 기록이 없어.</td>
             </tr>
           {% endif %}
         </tbody>
