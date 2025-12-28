@@ -40,9 +40,11 @@
               리스트 키: <code style="color:#e5e7eb;">{{ key }}</code>
               · 단어 수: <b>{{ meta.count }}</b>
               {% if meta.updated_at %}· 최근 수정: {{ meta.updated_at }}{% endif %}
+              {% if meta.sha256 %}· sha256: <code style="color:#e5e7eb;">{{ meta.sha256[:12] }}…</code>{% endif %}
             </div>
           </div>
-          <div>
+          <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
+            <a class="btn btn-secondary" href="/admin/wordlists/{{ key }}">관리</a>
             <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ key }}.txt" target="_blank">보기</a>
             <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ key }}/download">다운로드</a>
           </div>

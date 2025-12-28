@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}단어 DB - {{ meta.filename }}{% endblock %}
+{% block header_title %}단어 DB{% endblock %}
+
+{% block content %}
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+    <div>
+      <h1 style="margin-bottom:0.25rem;">{{ meta.filename }}</h1>
+      <div style="color:#9ca3af; font-size:0.9rem;">
+        리스트 키: <code style="color:#e5e7eb;">{{ list_name }}</code>
+        · 단어 수: <b>{{ meta.count }}</b>
+        {% if meta.updated_at %}· 최근 수정: {{ meta.updated_at }}{% endif %}
+        {% if meta.sha256 %}<br/>sha256: <code style="color:#e5e7eb;">{{ meta.sha256 }}</code>{% endif %}
+      </div>
+    </div>
+    <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
+      <a class="btn btn-secondary" href="/admin/wordlists/">목록</a>
+      <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ list_name }}.txt" target="_blank">TXT 보기</a>
+      <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ list_name }}/download">다운로드</a>
+    </div>
+  </div>
+
+  {% if ok %}
+    <div style="padding:0.6rem 0.8rem; background:#0b3a2a; border:1px solid #064e3b; border-radius:0.5rem; margin:1rem 0;">
+      ✅ 저장 완료
+    </div>
+  {% endif %}
+
+  {% if error %}
+    <div style="padding:0.6rem 0.8rem; background:#3a0b0b; border:1px solid #7f1d1d; border-radius:0.5rem; margin:1rem 0;">
+      ❌ 오류: {{ error }}
+      <div style="color:#9ca3af; font-size:0.85rem; margin-top:0.3rem;">
+        {% if error == 'encoding' %}UTF-8(.txt)로 저장한 파일을 업로드해줘.{% endif %}
+        {% if error == 'empty' %}빈 파일이야.{% endif %}
+        {% if error == 'toolarge' %}파일이 너무 커(5MB 제한).{% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220; margin-top:1rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+      <div style="font-weight:700;">TXT 업로드 (전체 덮어쓰기)</div>
+      <div style="color:#9ca3af; font-size:0.85rem;">권장: UTF-8 / 1줄 1단어 / 중복 자동 제거</div>
+    </div>
+
+    <form action="/admin/wordlists/upload/{{ list_name }}?next=/admin/wordlists/{{ list_name }}" method="post" enctype="multipart/form-data" style="margin-top:0.7rem;">
+      <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+        <input type="file" name="file" accept=".txt,text/plain" required style="color:#e5e7eb;" />
+        <button type="submit" class="btn btn-primary">업로드</button>
+      </div>
+    </form>
+  </div>
+
+  <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220; margin-top:1rem;">
+    <form method="get" action="/admin/wordlists/{{ list_name }}" style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+      <div style="font-weight:700;">검색</div>
+      <input type="text" name="q" value="{{ q }}" placeholder="단어 포함 검색" style="min-width:220px; padding:0.45rem 0.6rem; border-radius:0.5rem; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb;" />
+      <select name="page_size" style="padding:0.45rem 0.6rem; border-radius:0.5rem; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb;">
+        <option value="50" {% if page_size == 50 %}selected{% endif %}>50개</option>
+        <option value="200" {% if page_size == 200 %}selected{% endif %}>200개</option>
+        <option value="500" {% if page_size == 500 %}selected{% endif %}>500개</option>
+        <option value="1000" {% if page_size == 1000 %}selected{% endif %}>1000개</option>
+      </select>
+      <input type="hidden" name="page" value="1" />
+      <button type="submit" class="btn btn-secondary">적용</button>
+      <div style="color:#9ca3af; font-size:0.85rem; margin-left:auto;">
+        총 <b>{{ total }}</b>개 · {{ page }} / {{ total_pages }} 페이지
+      </div>
+    </form>
+
+    <div style="margin-top:0.9rem; overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="text-align:left; border-bottom:1px solid #1f2937;">
+            <th style="padding:0.4rem 0.3rem; width:90px; color:#9ca3af; font-weight:600;">#</th>
+            <th style="padding:0.4rem 0.3rem; color:#9ca3af; font-weight:600;">단어</th>
+            <th style="padding:0.4rem 0.3rem; width:120px; color:#9ca3af; font-weight:600;">ID</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr style="border-bottom:1px solid #111827;">
+              <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{{ offset + loop.index }}</td>
+              <td style="padding:0.35rem 0.3rem;">{{ row.word }}</td>
+              <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{{ row.id }}</td>
+            </tr>
+          {% endfor %}
+          {% if rows|length == 0 %}
+            <tr>
+              <td colspan="3" style="padding:0.6rem 0.3rem; color:#9ca3af;">결과가 없어.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:0.8rem; flex-wrap:wrap; margin-top:0.9rem;">
+      <div style="display:flex; gap:0.4rem;">
+        {% if page > 1 %}
+          <a class="btn btn-secondary" href="?q={{ q }}&page={{ page - 1 }}&page_size={{ page_size }}">이전</a>
+        {% else %}
+          <span class="btn btn-secondary" style="opacity:0.5; pointer-events:none;">이전</span>
+        {% endif %}
+
+        {% if page < total_pages %}
+          <a class="btn btn-secondary" href="?q={{ q }}&page={{ page + 1 }}&page_size={{ page_size }}">다음</a>
+        {% else %}
+          <span class="btn btn-secondary" style="opacity:0.5; pointer-events:none;">다음</span>
+        {% endif %}
+      </div>
+
+      <div style="color:#9ca3af; font-size:0.85rem;">
+        페이지: <b>{{ page }}</b> / {{ total_pages }}
+      </div>
+    </div>
+  </div>
+{% endblock %}

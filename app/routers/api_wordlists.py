@@ -6,13 +6,16 @@ import hashlib
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
 from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_admin_user_api
 from app import models
+
+
+MAX_PAGE_SIZE = 1000
 
 
 router = APIRouter(
@@ -138,6 +141,48 @@ def wordlist_download(list_name: str, db: Session = Depends(get_db)) -> Response
         media_type="text/plain; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/{list_name}/words")
+def wordlist_words(
+    list_name: str,
+    q: str = Query(default="", max_length=100),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=200, ge=1, le=MAX_PAGE_SIZE),
+    db: Session = Depends(get_db),
+) -> Dict[str, object]:
+    """단어 리스트를 페이지 단위(JSON)로 제공한다.
+
+    Phase 3(관리자 UI 검색/페이지네이션)에서 사용.
+
+    NOTE: .txt 엔드포인트가 이미 공개이므로, 이 엔드포인트도 공개(읽기)로 둔다.
+    """
+    name = _assert_list_name(list_name)
+    query = (q or "").strip()
+
+    base = db.query(models.BlueWarWord).filter(models.BlueWarWord.list_name == name)
+    if query:
+        # SQLite에서 ILIKE가 애매할 수 있어 contains로 간단히 처리한다(한글 단어 위주).
+        base = base.filter(models.BlueWarWord.word.contains(query))
+
+    total = int(base.count())
+    offset = int((page - 1) * page_size)
+    rows = (
+        base.order_by(models.BlueWarWord.id.asc())
+        .offset(offset)
+        .limit(int(page_size))
+        .all()
+    )
+    items = [{"id": int(w.id), "word": w.word} for w in rows]
+
+    return {
+        "list_name": name,
+        "q": query,
+        "total": total,
+        "page": int(page),
+        "page_size": int(page_size),
+        "items": items,
+    }
 
 
 @router.post("/{list_name}/upload")
