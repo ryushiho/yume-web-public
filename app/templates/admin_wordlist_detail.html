@@ -110,7 +110,7 @@
     <form method="get" action="/admin/wordlists/{{ list_name }}" style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
       <div style="font-weight:700;">검색</div>
       <input type="text" name="q" value="{{ q }}" placeholder="단어 포함 검색" style="min-width:220px; padding:0.45rem 0.6rem; border-radius:0.5rem; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb;" />
-      <select name="page_size" style="padding:0.45rem 0.6rem; border-radius:0.5rem; border:1px solid #1f2937; background:#0b1220; color:#e5e7eb;">
+      <select name="page_size">
         <option value="50" {% if page_size == 50 %}selected{% endif %}>50개</option>
         <option value="200" {% if page_size == 200 %}selected{% endif %}>200개</option>
         <option value="500" {% if page_size == 500 %}selected{% endif %}>500개</option>

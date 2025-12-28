@@ -10,27 +10,27 @@
     누구나 <strong>보기/검색</strong>만 가능합니다. (추가/수정/삭제는 관리자 전용)
 </p>
 
-<form method="get" action="/words/" style="margin-bottom:1.0rem;">
-    <label>리스트</label>
-    <select name="list">
-        {% for n in allowed_lists %}
-            <option value="{{ n }}" {% if n == list_name %}selected{% endif %}>{{ n }}</option>
-        {% endfor %}
-    </select>
+<form method="get" action="/words/" class="filters" style="margin-bottom:1.0rem;">
+    <div class="field">
+        <div class="label">리스트</div>
+        <select name="list">
+            {% for n in allowed_lists %}
+                <option value="{{ n }}" {% if n == list_name %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+        </select>
+    </div>
 
-    <label style="margin-left:0.75rem;">검색</label>
-    <input type="text" name="q" value="{{ q }}" placeholder="단어 포함 검색" />
+    <div class="field grow">
+        <div class="label">검색</div>
+        <input type="text" name="q" value="{{ q }}" placeholder="단어 포함 검색" />
+    </div>
 
     <input type="hidden" name="page_size" value="{{ page_size }}" />
     <button class="btn btn-primary" type="submit">검색</button>
 </form>
 
-<div style="color:#9ca3af; margin-bottom:1.0rem;">
-    <div>현재 리스트: <strong>{{ list_name }}</strong> (버전 {{ meta.version }}, {{ meta.count }}개)</div>
-    <div>
-        <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ list_name }}.txt">TXT로 보기</a>
-        <a class="btn btn-secondary" href="/api/bluewar/wordlists/meta">메타</a>
-    </div>
+<div class="hint" style="margin-bottom:1.0rem;">
+    현재 리스트: <strong>{{ list_name }}</strong> · v{{ meta.version }} · {{ meta.count }}개
 </div>
 
 <table>

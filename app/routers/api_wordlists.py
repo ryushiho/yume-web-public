@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status, Body
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status, Body, Header, Request
 from fastapi.responses import PlainTextResponse, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
@@ -14,9 +14,47 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_admin_user_api
 from app import models
+from app.config import settings
 
 
 MAX_PAGE_SIZE = 1000
+
+
+def _require_wordlist_token(
+    request: Request,
+    x_yume_wordlist_token: str | None = Header(default=None, alias="X-Yume-Wordlist-Token"),
+    token: str | None = Query(default=None),
+) -> None:
+    """원본 TXT(.txt / download) 접근 보호.
+
+    공개 단어 보기(/words)는 누구나 가능하지만,
+    원본 TXT는 '다운로드'가 너무 쉬워서 외부 공개를 막는다.
+
+    - 헤더: X-Yume-Wordlist-Token
+    - 또는 쿼리: ?token=
+    """
+    # 1) 관리자(세션)면 허용
+    try:
+        if request.session.get("user"):
+            return
+        member = request.session.get("member")
+        if member and bool(member.get("is_admin")):
+            return
+    except Exception:
+        # 세션 미들웨어가 없거나, request.session이 없더라도 토큰 검증으로 계속 진행
+        pass
+
+    # 2) 토큰 검증
+    expected = (settings.WORDLIST_TOKEN or "").strip()
+    provided = ((x_yume_wordlist_token or "").strip() or (token or "").strip())
+
+    # 운영에서 토큰이 비어있으면 보호 의미가 없다. -> 안전하게 막는다.
+    if not expected:
+        raise HTTPException(status_code=404, detail="not found")
+
+    if not provided or provided != expected:
+        # 존재 자체를 숨기기 위해 403이 아니라 404로 처리
+        raise HTTPException(status_code=404, detail="not found")
 
 
 router = APIRouter(
@@ -300,7 +338,11 @@ def wordlists_meta(db: Session = Depends(get_db)) -> Dict[str, Dict[str, Optiona
 
 
 @router.get("/{list_name}.txt", response_class=PlainTextResponse)
-def wordlist_txt(list_name: str, db: Session = Depends(get_db)) -> PlainTextResponse:
+def wordlist_txt(
+    list_name: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(_require_wordlist_token),
+) -> PlainTextResponse:
     """단어 리스트를 txt 형태로 제공한다.
 
     예)
@@ -321,7 +363,11 @@ def wordlist_txt(list_name: str, db: Session = Depends(get_db)) -> PlainTextResp
 
 
 @router.get("/{list_name}/download")
-def wordlist_download(list_name: str, db: Session = Depends(get_db)) -> Response:
+def wordlist_download(
+    list_name: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(_require_wordlist_token),
+) -> Response:
     """브라우저에서 바로 다운로드되도록 Content-Disposition을 포함한다."""
     name = _assert_list_name(list_name)
     words = (
@@ -351,7 +397,10 @@ def wordlist_words(
 
     Phase 3(관리자 UI 검색/페이지네이션)에서 사용.
 
-    NOTE: .txt 엔드포인트가 이미 공개이므로, 이 엔드포인트도 공개(읽기)로 둔다.
+    NOTE:
+      - 공개 "단어 보기"(/words) 페이지에서도 이 쿼리를 직접 사용하므로,
+        이 엔드포인트 자체는 공개(읽기)로 유지한다.
+      - 원본 TXT 다운로드는 토큰으로 보호한다.
     """
     name = _assert_list_name(list_name)
     query = (q or "").strip()
