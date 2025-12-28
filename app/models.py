@@ -205,3 +205,43 @@ class BlueWarWord(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+
+class BlueWarWordListSnapshot(Base):
+    """블루전 단어 리스트 버전 스냅샷(Phase 6).
+
+    - 업로드/추가/수정/삭제/롤백 등 "변경"이 발생할 때마다 현재 리스트 전체를 스냅샷으로 저장한다.
+    - 운영 실수(잘못 업로드 등) 시 특정 버전으로 롤백할 수 있다.
+    """
+
+    __tablename__ = "bluewar_wordlist_snapshots"
+    __table_args__ = (
+        UniqueConstraint("list_name", "version", name="uq_bluewar_wordlist_snapshots_list_version"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # "suggestion" | "blue_archive_words"
+    list_name = Column(String(50), nullable=False, index=True)
+
+    # 리스트별 버전(1부터 증가)
+    version = Column(Integer, nullable=False, index=True)
+
+    # 스냅샷 시점의 리스트 정보
+    sha256 = Column(String(64), nullable=False)
+    count = Column(Integer, nullable=False, default=0)
+
+    # txt 원문(마지막에 개행 포함). 롤백 시 이 값을 그대로 적용한다.
+    content_text = Column(Text, nullable=False, default="")
+
+    # upload/add/edit/delete/bulk_delete/rollback/bootstrap 등
+    action = Column(String(30), nullable=False, default="unknown")
+
+    # 누가(어떤 관리자) 변경했는지
+    created_by = Column(String(100), nullable=True)
+    created_by_name = Column(String(100), nullable=True)
+
+    # 보조 메모(예: rollback to v3)
+    note = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+

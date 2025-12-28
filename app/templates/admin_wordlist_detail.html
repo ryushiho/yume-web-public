@@ -10,6 +10,7 @@
       <div style="color:#9ca3af; font-size:0.9rem;">
         리스트 키: <code style="color:#e5e7eb;">{{ list_name }}</code>
         · 단어 수: <b>{{ meta.count }}</b>
+        · 버전: <b>{{ meta.version }}</b>
         {% if meta.updated_at %}· 최근 수정: {{ meta.updated_at }}{% endif %}
         {% if meta.sha256 %}<br/>sha256: <code style="color:#e5e7eb;">{{ meta.sha256 }}</code>{% endif %}
       </div>
@@ -18,6 +19,54 @@
       <a class="btn btn-secondary" href="/admin/wordlists/">목록</a>
       <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ list_name }}.txt" target="_blank">TXT 보기</a>
       <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ list_name }}/download">다운로드</a>
+    </div>
+  </div>
+
+  <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220; margin-top:1rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+      <div style="font-weight:700;">버전 기록 (최근 20개)</div>
+      <div style="color:#9ca3af; font-size:0.85rem;">잘못된 업로드/수정 시 원하는 버전으로 롤백할 수 있어.</div>
+    </div>
+
+    <div style="margin-top:0.8rem; overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="text-align:left; border-bottom:1px solid #1f2937;">
+            <th style="padding:0.4rem 0.3rem; width:90px; color:#9ca3af; font-weight:600;">버전</th>
+            <th style="padding:0.4rem 0.3rem; width:110px; color:#9ca3af; font-weight:600;">액션</th>
+            <th style="padding:0.4rem 0.3rem; width:210px; color:#9ca3af; font-weight:600;">시각</th>
+            <th style="padding:0.4rem 0.3rem; width:180px; color:#9ca3af; font-weight:600;">수정자</th>
+            <th style="padding:0.4rem 0.3rem; width:90px; color:#9ca3af; font-weight:600;">개수</th>
+            <th style="padding:0.4rem 0.3rem; width:170px; color:#9ca3af; font-weight:600;">sha256</th>
+            <th style="padding:0.4rem 0.3rem; color:#9ca3af; font-weight:600;">메모</th>
+            <th style="padding:0.4rem 0.3rem; width:120px; color:#9ca3af; font-weight:600;">작업</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in versions %}
+            <tr style="border-bottom:1px solid #111827;">
+              <td style="padding:0.35rem 0.3rem;"><b>v{{ v.version }}</b>{% if meta.version and (v.version|string) == (meta.version|string) %} <span style="color:#22c55e; font-size:0.8rem;">(현재)</span>{% endif %}</td>
+              <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{{ v.action }}</td>
+              <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{% if v.created_at %}{{ v.created_at }}{% endif %}</td>
+              <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{{ v.created_by }}{% if v.created_by_name %} ({{ v.created_by_name }}){% endif %}</td>
+              <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{{ v.count }}</td>
+              <td style="padding:0.35rem 0.3rem; color:#9ca3af;"><code style="color:#e5e7eb;">{{ v.sha256[:12] }}…</code></td>
+              <td style="padding:0.35rem 0.3rem; color:#9ca3af;">{{ v.note }}</td>
+              <td style="padding:0.35rem 0.3rem;">
+                <form method="post" action="/admin/wordlists/{{ list_name }}/rollback/{{ v.version }}" style="margin:0;">
+                  <input type="hidden" name="next" value="{{ current_url }}" />
+                  <button type="submit" class="btn btn-danger" onclick="return confirm('v{{ v.version }}로 롤백할까? (현재 상태는 새 버전으로 다시 기록돼)');">롤백</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          {% if versions|length == 0 %}
+            <tr>
+              <td colspan="8" style="padding:0.6rem 0.3rem; color:#9ca3af;">버전 기록이 없어.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
     </div>
   </div>
 

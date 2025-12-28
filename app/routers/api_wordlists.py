@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status, Body
 from fastapi.responses import PlainTextResponse, Response
@@ -90,13 +90,80 @@ def _clean_word(word: Optional[str]) -> str:
 
 
 def _upsert_wordlist_overwrite(db: Session, list_name: str, words: List[str]) -> None:
-    """해당 리스트를 완전히 교체한다(덮어쓰기)."""
+    """해당 리스트를 완전히 교체한다(덮어쓰기).
+
+    NOTE:
+      - Phase 6(버전/롤백)부터는 "스냅샷"과 같은 트랜잭션에 묶기 위해 여기서 commit하지 않는다.
+      - 호출자가 db.commit()을 수행해야 한다.
+    """
     db.query(models.BlueWarWord).filter(models.BlueWarWord.list_name == list_name).delete()
     now = datetime.utcnow()
     rows = [models.BlueWarWord(list_name=list_name, word=w, created_at=now, updated_at=now) for w in words]
     if rows:
         db.bulk_save_objects(rows)
-    db.commit()
+
+
+def _actor_fields(actor: Optional[Dict[str, Any]]) -> Tuple[Optional[str], Optional[str]]:
+    """스냅샷/감사로그에 남길 '누가' 정보를 문자열로 정규화."""
+    if not actor:
+        return ("system", None)
+
+    nickname = actor.get("nickname")
+    # member login
+    if actor.get("member_id") is not None:
+        return (f"member:{actor.get('member_id')}", nickname)
+    # legacy admin login (/auth/login)
+    if actor.get("id") is not None:
+        return (f"admin:{actor.get('id')}", nickname)
+
+    return ("unknown", nickname)
+
+
+def _current_version(db: Session, list_name: str) -> int:
+    v = (
+        db.query(func.max(models.BlueWarWordListSnapshot.version))
+        .filter(models.BlueWarWordListSnapshot.list_name == list_name)
+        .scalar()
+    )
+    return int(v or 0)
+
+
+def _create_snapshot(
+    db: Session,
+    list_name: str,
+    action: str,
+    actor: Optional[Dict[str, Any]] = None,
+    note: Optional[str] = None,
+) -> models.BlueWarWordListSnapshot:
+    """현재 DB 상태를 기준으로 스냅샷을 1개 추가한다.
+
+    - 호출 시점의 "현재" 단어 목록을 그대로 저장한다.
+    - commit은 호출자가 수행한다.
+    """
+    words = (
+        db.query(models.BlueWarWord)
+        .filter(models.BlueWarWord.list_name == list_name)
+        .order_by(models.BlueWarWord.id.asc())
+        .all()
+    )
+    txt = _build_txt([w.word for w in words])
+    sha = _sha256(txt)
+    ver = _current_version(db, list_name) + 1
+    created_by, created_by_name = _actor_fields(actor)
+
+    snap = models.BlueWarWordListSnapshot(
+        list_name=list_name,
+        version=int(ver),
+        sha256=sha,
+        count=int(len(words)),
+        content_text=txt,
+        action=(action or "unknown")[:30],
+        created_by=created_by,
+        created_by_name=created_by_name,
+        note=note,
+    )
+    db.add(snap)
+    return snap
 
 
 @router.post("/{list_name}/words")
@@ -104,7 +171,7 @@ def word_add(
     list_name: str,
     data: Dict[str, str] = Body(...),
     db: Session = Depends(get_db),
-    _: dict = Depends(get_current_admin_user_api),
+    actor: dict = Depends(get_current_admin_user_api),
 ) -> Dict[str, object]:
     """관리자 전용: 단어 1개 추가."""
     name = _assert_list_name(list_name)
@@ -112,6 +179,7 @@ def word_add(
     row = models.BlueWarWord(list_name=name, word=w)
     db.add(row)
     try:
+        _create_snapshot(db, name, action="add", actor=actor, note=f"add:{w}")
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -126,7 +194,7 @@ def word_update(
     word_id: int,
     data: Dict[str, str] = Body(...),
     db: Session = Depends(get_db),
-    _: dict = Depends(get_current_admin_user_api),
+    actor: dict = Depends(get_current_admin_user_api),
 ) -> Dict[str, object]:
     """관리자 전용: 단어 1개 수정."""
     name = _assert_list_name(list_name)
@@ -141,6 +209,7 @@ def word_update(
     w = _clean_word((data or {}).get("word", ""))
     row.word = w
     try:
+        _create_snapshot(db, name, action="edit", actor=actor, note=f"id:{int(word_id)}")
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -154,7 +223,7 @@ def word_delete(
     list_name: str,
     word_id: int,
     db: Session = Depends(get_db),
-    _: dict = Depends(get_current_admin_user_api),
+    actor: dict = Depends(get_current_admin_user_api),
 ) -> Dict[str, object]:
     """관리자 전용: 단어 1개 삭제."""
     name = _assert_list_name(list_name)
@@ -167,6 +236,7 @@ def word_delete(
     if not row:
         raise HTTPException(status_code=404, detail="not found")
     db.delete(row)
+    _create_snapshot(db, name, action="delete", actor=actor, note=f"id:{int(word_id)}")
     db.commit()
     return {"deleted": 1, "id": int(word_id), "list_name": name}
 
@@ -176,7 +246,7 @@ def word_bulk_delete(
     list_name: str,
     data: Dict[str, List[int]] = Body(...),
     db: Session = Depends(get_db),
-    _: dict = Depends(get_current_admin_user_api),
+    actor: dict = Depends(get_current_admin_user_api),
 ) -> Dict[str, object]:
     """관리자 전용: 여러 단어 삭제.
 
@@ -198,6 +268,7 @@ def word_bulk_delete(
         .filter(models.BlueWarWord.id.in_(ids))
         .delete(synchronize_session=False)
     )
+    _create_snapshot(db, name, action="bulk_delete", actor=actor, note=f"count:{len(ids)}")
     db.commit()
     return {"deleted": int(deleted), "list_name": name}
 
@@ -217,10 +288,12 @@ def wordlists_meta(db: Session = Depends(get_db)) -> Dict[str, Dict[str, Optiona
 
         words = [w.word for w in q.order_by(models.BlueWarWord.id.asc()).all()]
         txt = _build_txt(words)
+        version = _current_version(db, name)
         out[name] = {
             "filename": ALLOWED_LISTS[name],
             "count": str(count),
             "updated_at": last_updated.isoformat() if last_updated else None,
+            "version": str(version),
             "sha256": _sha256(txt),
         }
     return out
@@ -313,7 +386,7 @@ async def wordlist_upload(
     list_name: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _: dict = Depends(get_current_admin_user_api),
+    actor: dict = Depends(get_current_admin_user_api),
 ) -> Dict[str, str]:
     """관리자 전용: txt 업로드로 전체 덮어쓰기.
 
@@ -340,5 +413,93 @@ async def wordlist_upload(
     words = _parse_txt(text)
     _upsert_wordlist_overwrite(db, name, words)
 
+    # 업로드 변경을 버전으로 남긴다.
+    _create_snapshot(db, name, action="upload", actor=actor, note=f"filename:{file.filename}")
+    db.commit()
+
     txt = _build_txt(words)
-    return {"list_name": name, "filename": ALLOWED_LISTS[name], "count": str(len(words)), "sha256": _sha256(txt)}
+    return {
+        "list_name": name,
+        "filename": ALLOWED_LISTS[name],
+        "count": str(len(words)),
+        "version": str(_current_version(db, name)),
+        "sha256": _sha256(txt),
+    }
+
+
+@router.get("/{list_name}/versions")
+def wordlist_versions(
+    list_name: str,
+    limit: int = Query(default=30, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_admin_user_api),
+) -> Dict[str, object]:
+    """관리자 전용: 버전(스냅샷) 목록."""
+    name = _assert_list_name(list_name)
+
+    rows = (
+        db.query(models.BlueWarWordListSnapshot)
+        .filter(models.BlueWarWordListSnapshot.list_name == name)
+        .order_by(models.BlueWarWordListSnapshot.version.desc())
+        .limit(int(limit))
+        .all()
+    )
+
+    items = []
+    for r in rows:
+        items.append(
+            {
+                "id": int(r.id),
+                "version": int(r.version),
+                "action": r.action,
+                "count": int(r.count),
+                "sha256": r.sha256,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "created_by": r.created_by,
+                "created_by_name": r.created_by_name,
+                "note": r.note,
+            }
+        )
+
+    return {"list_name": name, "items": items}
+
+
+@router.post("/{list_name}/rollback/{version}")
+def wordlist_rollback(
+    list_name: str,
+    version: int,
+    db: Session = Depends(get_db),
+    actor: dict = Depends(get_current_admin_user_api),
+) -> Dict[str, str]:
+    """관리자 전용: 특정 버전으로 롤백.
+
+    - 요청이 오면 해당 버전의 content_text를 현재 word 테이블에 덮어쓴다.
+    - 그리고 "rollback" 액션으로 새로운 버전을 하나 더 만든다(감사로그/복구용).
+    """
+    name = _assert_list_name(list_name)
+    v = int(version)
+    if v <= 0:
+        raise HTTPException(status_code=400, detail="invalid version")
+
+    snap = (
+        db.query(models.BlueWarWordListSnapshot)
+        .filter(models.BlueWarWordListSnapshot.list_name == name)
+        .filter(models.BlueWarWordListSnapshot.version == v)
+        .first()
+    )
+    if not snap:
+        raise HTTPException(status_code=404, detail="version not found")
+
+    words = _parse_txt(snap.content_text or "")
+    _upsert_wordlist_overwrite(db, name, words)
+    _create_snapshot(db, name, action="rollback", actor=actor, note=f"rollback to v{v}")
+    db.commit()
+
+    txt = _build_txt(words)
+    return {
+        "list_name": name,
+        "filename": ALLOWED_LISTS[name],
+        "count": str(len(words)),
+        "version": str(_current_version(db, name)),
+        "sha256": _sha256(txt),
+    }

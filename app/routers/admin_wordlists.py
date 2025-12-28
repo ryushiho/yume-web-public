@@ -24,6 +24,8 @@ from app.routers.api_wordlists import (
     _sha256,
     _upsert_wordlist_overwrite,
     _clean_word,
+    _create_snapshot,
+    _current_version,
 )
 
 
@@ -41,11 +43,13 @@ def _meta_for(db: Session, list_name: str) -> Dict[str, Optional[str]]:
     )
     words = [w.word for w in q.order_by(models.BlueWarWord.id.asc()).all()]
     txt = _build_txt(words)
+    version = _current_version(db, list_name)
     return {
         "list_name": list_name,
         "filename": ALLOWED_LISTS[list_name],
         "count": str(count),
         "updated_at": last_updated.isoformat() if last_updated else None,
+        "version": str(version),
         "sha256": _sha256(txt),
     }
 
@@ -134,6 +138,15 @@ def admin_wordlist_detail(
 
     meta = _meta_for(db, name)
 
+    # Phase 6: 최근 버전(스냅샷) 기록
+    versions = (
+        db.query(models.BlueWarWordListSnapshot)
+        .filter(models.BlueWarWordListSnapshot.list_name == name)
+        .order_by(models.BlueWarWordListSnapshot.version.desc())
+        .limit(20)
+        .all()
+    )
+
     base = db.query(models.BlueWarWord).filter(models.BlueWarWord.list_name == name)
     if q:
         base = base.filter(models.BlueWarWord.word.contains(q))
@@ -161,6 +174,7 @@ def admin_wordlist_detail(
             "request": request,
             "list_name": name,
             "meta": meta,
+            "versions": versions,
             "q": q,
             "page": page,
             "page_size": page_size,
@@ -222,7 +236,13 @@ async def admin_wordlists_upload(
             return _redir_error("encoding", name)
 
     words = _parse_txt(text)
-    _upsert_wordlist_overwrite(db, name, words)
+    try:
+        _upsert_wordlist_overwrite(db, name, words)
+        _create_snapshot(db, name, action="upload", actor=_admin, note=f"filename:{file.filename}")
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return _redir_error("dup", name)
 
     if next_url:
         sep = "&" if "?" in next_url else "?"
@@ -262,6 +282,7 @@ async def admin_word_add(
     row = models.BlueWarWord(list_name=name, word=w)
     db.add(row)
     try:
+        _create_snapshot(db, name, action="add", actor=_admin, note=f"add:{w}")
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -319,9 +340,13 @@ async def admin_word_delete(
         .filter(models.BlueWarWord.id.in_(target_ids))
         .delete(synchronize_session=False)
     )
-    db.commit()
     if int(deleted) <= 0:
+        db.rollback()
         return _redir(err="notfound")
+
+    action = "delete" if len(target_ids) == 1 else "bulk_delete"
+    _create_snapshot(db, name, action=action, actor=_admin, note=f"count:{len(target_ids)}")
+    db.commit()
     return _redir(ok=True)
 
 
@@ -406,6 +431,7 @@ async def admin_word_edit_submit(
 
     row.word = w
     try:
+        _create_snapshot(db, name, action="edit", actor=_admin, note=f"id:{int(word_id)}")
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -416,3 +442,57 @@ async def admin_word_edit_submit(
 
     sep = "&" if "?" in next_url else "?"
     return RedirectResponse(url=f"{next_url}{sep}ok=1", status_code=303)
+
+
+@router.post("/{list_name}/rollback/{version}")
+async def admin_wordlist_rollback(
+    request: Request,
+    list_name: str,
+    version: int,
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    """Phase 6: 관리자 UI 롤백.
+
+    - 특정 버전의 스냅샷 content_text를 현재 리스트에 덮어쓴다.
+    - 그리고 rollback 액션으로 새로운 버전을 하나 더 만든다.
+    """
+    form = await request.form()
+    next_url = _safe_next_url(str(form.get("next") or request.query_params.get("next") or ""))
+    if not next_url:
+        next_url = f"/admin/wordlists/{list_name}"
+
+    def _redir(err: str = "", ok: bool = False) -> RedirectResponse:
+        sep = "&" if "?" in next_url else "?"
+        if ok:
+            return RedirectResponse(url=f"{next_url}{sep}ok=1", status_code=303)
+        return RedirectResponse(url=f"{next_url}{sep}error={err}", status_code=303)
+
+    try:
+        name = _assert_list_name(list_name)
+    except HTTPException:
+        return RedirectResponse(url="/admin/wordlists/?error=unknown&which=" + str(list_name), status_code=303)
+
+    v = int(version)
+    if v <= 0:
+        return _redir(err="invalid")
+
+    snap = (
+        db.query(models.BlueWarWordListSnapshot)
+        .filter(models.BlueWarWordListSnapshot.list_name == name)
+        .filter(models.BlueWarWordListSnapshot.version == v)
+        .first()
+    )
+    if not snap:
+        return _redir(err="notfound")
+
+    words = _parse_txt(snap.content_text or "")
+    try:
+        _upsert_wordlist_overwrite(db, name, words)
+        _create_snapshot(db, name, action="rollback", actor=_admin, note=f"rollback to v{v}")
+        db.commit()
+    except Exception:
+        db.rollback()
+        return _redir(err="unknown")
+
+    return _redir(ok=True)

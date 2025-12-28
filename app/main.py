@@ -12,6 +12,7 @@ from app.database import Base, engine
 from app.database import SessionLocal
 from app.schema import ensure_sqlite_schema
 from app.seed_import import ensure_blue_records_seed
+from app.seed_wordlists import seed_wordlist_snapshots
 from app import models
 from app.security import hash_password
 
@@ -56,6 +57,9 @@ def _startup_seed_import() -> None:
     db = SessionLocal()
     try:
         ensure_blue_records_seed(db)
+
+        # Phase 6: 기존 wordlist 데이터를 최초 1회 스냅샷으로 고정(버전/롤백용)
+        seed_wordlist_snapshots()
 
         # ✅ 회원 관리자 권한 부트스트랩(안전한 방식)
         # - 더 이상 회원 테이블을 통째로 삭제하지 않는다.
