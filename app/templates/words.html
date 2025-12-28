@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}단어 보기{% endblock %}
+{% block header_title %}단어 보기{% endblock %}
+
+{% block content %}
+<h1>단어 보기</h1>
+
+<p style="color:#9ca3af; margin-bottom:0.9rem;">
+    누구나 <strong>보기/검색</strong>만 가능합니다. (추가/수정/삭제는 관리자 전용)
+</p>
+
+<form method="get" action="/words/" style="margin-bottom:1.0rem;">
+    <label>리스트</label>
+    <select name="list">
+        {% for n in allowed_lists %}
+            <option value="{{ n }}" {% if n == list_name %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+    </select>
+
+    <label style="margin-left:0.75rem;">검색</label>
+    <input type="text" name="q" value="{{ q }}" placeholder="단어 포함 검색" />
+
+    <input type="hidden" name="page_size" value="{{ page_size }}" />
+    <button class="btn btn-primary" type="submit">검색</button>
+</form>
+
+<div style="color:#9ca3af; margin-bottom:1.0rem;">
+    <div>현재 리스트: <strong>{{ list_name }}</strong> (버전 {{ meta.version }}, {{ meta.count }}개)</div>
+    <div>
+        <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ list_name }}.txt">TXT로 보기</a>
+        <a class="btn btn-secondary" href="/api/bluewar/wordlists/meta">메타</a>
+    </div>
+</div>
+
+<table>
+    <thead>
+    <tr>
+        <th style="width:120px;">번호</th>
+        <th>단어</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        <tr>
+            <td>{{ offset + loop.index }}</td>
+            <td style="font-weight:600;">{{ row.word }}</td>
+        </tr>
+    {% else %}
+        <tr>
+            <td colspan="2" style="color:#9ca3af;">검색 결과가 없습니다.</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<div style="margin-top:1.0rem; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+    <span style="color:#9ca3af;">총 {{ total }}개</span>
+    <span style="color:#9ca3af;">페이지 {{ page }} / {{ total_pages }}</span>
+
+    {% if page > 1 %}
+        <a class="btn btn-secondary" href="/words/?list={{ list_name }}&q={{ q }}&page={{ page - 1 }}&page_size={{ page_size }}">이전</a>
+    {% endif %}
+
+    {% if page < total_pages %}
+        <a class="btn btn-secondary" href="/words/?list={{ list_name }}&q={{ q }}&page={{ page + 1 }}&page_size={{ page_size }}">다음</a>
+    {% endif %}
+</div>
+
+{% endblock %}

@@ -34,9 +34,7 @@ class RankingRow(TypedDict):
     total_wins: int
     total_losses: int
     win_rate: float
-    gap_plus: int
-    gap_minus: int
-    net_gap: int
+    net: int
 
 
 def _resolve_display_name(
@@ -58,48 +56,49 @@ def ranking_page(
     request: Request,
     db: Session = Depends(get_db),
     _viewer=Depends(get_current_member_or_admin),
-    mode: str = "pvp",
     limit: int = 50,
 ):
     """블루전 랭킹.
 
     정렬 기준:
-    1) 순수 승차(net_gap) DESC
+    1) 승차(총 승 - 총 패) DESC
     2) 총 승리(기본 전적 포함) DESC
-    3) 총 매치 수 DESC
+    3) 총 전적(기본 전적 포함) DESC
+
+    주의:
+    - 화면에서는 PVP만 제공한다.
+    - 0전(총 전적이 0) 유저는 항상 맨 아래로 보낸다.
     """
 
-    mode = (mode or "pvp").strip().lower()
-    if mode not in {"pvp", "practice", "all"}:
-        mode = "pvp"
+    mode = "pvp"
 
     q = db.query(models.BlueWarMatch)
     # "완료"된 매치만 집계 (winner/loser가 있는 경우)
     q = q.filter(models.BlueWarMatch.winner_discord_id.isnot(None))
     q = q.filter(models.BlueWarMatch.loser_discord_id.isnot(None))
 
-    if mode != "all":
-        q = q.filter(models.BlueWarMatch.mode == mode)
+    # ✅ PVP만 집계
+    q = q.filter(models.BlueWarMatch.mode == mode)
 
     matches: List[models.BlueWarMatch] = q.order_by(models.BlueWarMatch.id.desc()).all()
 
-    ids: Set[str] = set()
+    ids_from_matches: Set[str] = set()
     match_ids: List[int] = []
     for m in matches:
         match_ids.append(m.id)
         if m.winner_discord_id:
-            ids.add(m.winner_discord_id)
+            ids_from_matches.add(m.winner_discord_id)
         if m.loser_discord_id:
-            ids.add(m.loser_discord_id)
+            ids_from_matches.add(m.loser_discord_id)
 
-    users_by_discord: Dict[str, models.User] = {}
-    if ids:
-        users = (
-            db.query(models.User)
-            .filter(models.User.discord_id.in_(list(ids)))
-            .all()
-        )
-        users_by_discord = {u.discord_id: u for u in users}
+    # ✅ 랭킹은 "유저 테이블"도 같이 집계해야 한다.
+    # - blue_records.json(기본 전적)만 있어도 랭킹이 떠야 함
+    users: List[models.User] = db.query(models.User).all()
+    users_by_discord: Dict[str, models.User] = {u.discord_id: u for u in users}
+    ids_from_users: Set[str] = set(users_by_discord.keys())
+
+    # 최종 집계 대상: (유저 테이블 + 매치에서 등장한 디스코드 ID)
+    ids: Set[str] = set(ids_from_users) | set(ids_from_matches)
 
     fallback_names_by_discord: Dict[str, str] = {}
     if match_ids:
@@ -119,30 +118,24 @@ def ranking_page(
         stats[did] = {
             "wins": 0,
             "losses": 0,
-            "gap_plus": 0,
-            "gap_minus": 0,
             "base_wins": int(u.base_wins) if u else 0,
             "base_losses": int(u.base_losses) if u else 0,
         }
 
     for m in matches:
-        gap = int(m.win_gap or 0)
-
         if m.winner_discord_id:
             s = stats.setdefault(
                 m.winner_discord_id,
-                {"wins": 0, "losses": 0, "gap_plus": 0, "gap_minus": 0, "base_wins": 0, "base_losses": 0},
+                {"wins": 0, "losses": 0, "base_wins": 0, "base_losses": 0},
             )
             s["wins"] += 1
-            s["gap_plus"] += gap
 
         if m.loser_discord_id:
             s = stats.setdefault(
                 m.loser_discord_id,
-                {"wins": 0, "losses": 0, "gap_plus": 0, "gap_minus": 0, "base_wins": 0, "base_losses": 0},
+                {"wins": 0, "losses": 0, "base_wins": 0, "base_losses": 0},
             )
             s["losses"] += 1
-            s["gap_minus"] += gap
 
     rows: List[RankingRow] = []
     for did, s in stats.items():
@@ -157,9 +150,7 @@ def ranking_page(
         total_losses = losses + base_losses
         total_battles = total_wins + total_losses
 
-        gap_plus = int(s.get("gap_plus", 0))
-        gap_minus = int(s.get("gap_minus", 0))
-        net_gap = gap_plus - gap_minus
+        net = total_wins - total_losses
 
         win_rate = (total_wins / total_battles * 100.0) if total_battles > 0 else 0.0
 
@@ -181,18 +172,19 @@ def ranking_page(
                 "total_wins": total_wins,
                 "total_losses": total_losses,
                 "win_rate": win_rate,
-                "gap_plus": gap_plus,
-                "gap_minus": gap_minus,
-                "net_gap": net_gap,
+                "net": net,
             }
         )
 
-    # 정렬: net_gap DESC, total_wins DESC, matches DESC, name ASC
+    # ✅ 정렬:
+    # - 0전(총 전적 0) 유저는 무조건 맨 아래
+    # - 그 외에는 승차(net) DESC → 총 승 DESC → 총 매치 DESC → 이름
     rows.sort(
         key=lambda r: (
-            -r["net_gap"],
+            1 if (r["total_wins"] + r["total_losses"]) == 0 else 0,
+            -r["net"],
             -r["total_wins"],
-            -r["matches"],
+            -(r["total_wins"] + r["total_losses"]),
             r["name"],
         )
     )

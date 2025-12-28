@@ -8,6 +8,7 @@ from config import settings
 from app.routers import auth, dashboard, records, users, api_bluewar, ranking, bluewar, home, member, admin_members
 from app.routers import admin_wordlists
 from app.routers import api_wordlists
+from app.routers import words
 from app.database import Base, engine
 from app.database import SessionLocal
 from app.schema import ensure_sqlite_schema
@@ -46,6 +47,7 @@ app.include_router(users.router)
 app.include_router(api_bluewar.router)
 app.include_router(api_wordlists.router)
 app.include_router(ranking.router)
+app.include_router(words.router)
 app.include_router(admin_members.router)
 app.include_router(admin_wordlists.router)
 
