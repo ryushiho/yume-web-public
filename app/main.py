@@ -30,10 +30,6 @@ app = FastAPI(
     redoc_url=None,
 )
 
-# 세션 미들웨어 (로그인 상태용)
-# - public repo에서는 하드코딩을 피하기 위해 env 기반으로 설정한다.
-app.add_middleware(SessionMiddleware, secret_key=settings.SESSION_SECRET)
-
 
 # ============================
 #   로그인 전 UI 잠금
@@ -72,11 +68,17 @@ async def require_login_for_ui(request: Request, call_next):
     # 3) 그 외는 로그인 강제
     #    ⚠️ SessionMiddleware가 아직 실행되기 전에는 request.session 속성이 없을 수 있다.
     #    그래서 scope의 session을 안전하게 읽는다.
-    session = request.scope.get("session") or {}
+    session = getattr(request, "session", {}) or {}
     if not session.get("user") and not session.get("member"):
         return RedirectResponse(url="/member/login", status_code=303)
 
     return await call_next(request)
+
+
+# 세션 미들웨어 (로그인 상태용)
+# - public repo에서는 하드코딩을 피하기 위해 env 기반으로 설정한다.
+# ⚠️ require_login_for_ui 미들웨어가 세션을 읽을 수 있도록 SessionMiddleware를 *나중에* 등록한다.
+app.add_middleware(SessionMiddleware, secret_key=settings.SESSION_SECRET)
 
 # 정적 파일 (CSS, JS)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
