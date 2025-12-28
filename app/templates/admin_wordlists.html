@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}단어 DB 관리{% endblock %}
+{% block header_title %}단어 DB 관리{% endblock %}
+
+{% block content %}
+  <h1>블루전 단어 DB</h1>
+
+  {% if ok %}
+    <div style="padding:0.6rem 0.8rem; background:#0b3a2a; border:1px solid #064e3b; border-radius:0.5rem; margin-bottom:1rem;">
+      ✅ 저장 완료 ({{ which }})
+    </div>
+  {% endif %}
+
+  {% if error %}
+    <div style="padding:0.6rem 0.8rem; background:#3a0b0b; border:1px solid #7f1d1d; border-radius:0.5rem; margin-bottom:1rem;">
+      ❌ 오류: {{ error }} ({{ which }})
+      <div style="color:#9ca3af; font-size:0.85rem; margin-top:0.3rem;">
+        {% if error == 'encoding' %}UTF-8(.txt)로 저장한 파일을 업로드해줘.{% endif %}
+        {% if error == 'empty' %}빈 파일이야.{% endif %}
+        {% if error == 'toolarge' %}파일이 너무 커(5MB 제한).{% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <p style="color:#9ca3af; margin-bottom:1rem;">
+    업로드는 <b>전체 덮어쓰기</b>야. (Phase 2)
+    단어 하나씩 추가/수정/삭제는 Phase 4에서 붙일 거고, 지금은 운영 안정성부터 잡는다.
+  </p>
+
+  <div style="display:grid; grid-template-columns: 1fr; gap: 1.2rem;">
+    {% for key, meta in metas.items() %}
+      <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+          <div>
+            <div style="font-weight:700; font-size:1.05rem;">
+              {{ meta.filename }}
+            </div>
+            <div style="color:#9ca3af; font-size:0.85rem; margin-top:0.2rem;">
+              리스트 키: <code style="color:#e5e7eb;">{{ key }}</code>
+              · 단어 수: <b>{{ meta.count }}</b>
+              {% if meta.updated_at %}· 최근 수정: {{ meta.updated_at }}{% endif %}
+            </div>
+          </div>
+          <div>
+            <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ key }}.txt" target="_blank">보기</a>
+            <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ key }}/download">다운로드</a>
+          </div>
+        </div>
+
+        <hr style="border:none; border-top:1px solid #1f2937; margin:0.9rem 0;" />
+
+        <form action="/admin/wordlists/upload/{{ key }}" method="post" enctype="multipart/form-data">
+          <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+            <input type="file" name="file" accept=".txt,text/plain" required style="color:#e5e7eb;" />
+            <button type="submit" class="btn btn-primary">TXT 업로드 (덮어쓰기)</button>
+          </div>
+          <div style="color:#9ca3af; font-size:0.8rem; margin-top:0.35rem;">
+            권장: UTF-8 / 1줄 1단어 / 중복은 자동 제거
+          </div>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}

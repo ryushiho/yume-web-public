@@ -43,6 +43,32 @@ async def get_current_admin_user(request: Request) -> Dict[str, Any]:
     )
 
 
+async def get_current_admin_user_api(request: Request) -> Dict[str, Any]:
+    """API 전용 관리자 권한 확인.
+
+    - HTML 페이지 라우터는 리다이렉트(303)가 UX가 좋지만,
+      API는 보통 401/403 JSON 응답을 기대한다.
+    - (구) /auth/login 세션: request.session["user"]
+    - (신) 회원 로그인 세션: request.session["member"]["is_admin"] == True
+    """
+    user = request.session.get("user")
+    if user:
+        return user
+
+    member = request.session.get("member") or {}
+    if member and member.get("is_admin"):
+        return {
+            "id": member.get("id"),
+            "member_id": member.get("member_id"),
+            "nickname": member.get("nickname"),
+        }
+
+    # 로그인 자체가 없으면 401, 로그인은 했지만 관리자 아니면 403
+    if request.session.get("member"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin required")
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="not authenticated")
+
+
 
 async def get_optional_admin_user(request: Request) -> Optional[Dict[str, Any]]:
     """
