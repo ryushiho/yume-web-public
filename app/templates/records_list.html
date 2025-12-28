@@ -5,6 +5,18 @@
 {% block content %}
 <h1>블루전 전적 목록</h1>
 
+<div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin: 0.8rem 0 1rem;">
+    <a href="/records/?mode=pvp" class="btn {% if mode == 'pvp' %}btn-primary{% else %}btn-secondary{% endif %}">
+        PVP ({{ pvp_count }})
+    </a>
+    <a href="/records/?mode=practice" class="btn {% if mode == 'practice' %}btn-primary{% else %}btn-secondary{% endif %}">
+        연습 ({{ practice_count }})
+    </a>
+    <a href="/records/?mode=all" class="btn {% if mode == 'all' %}btn-primary{% else %}btn-secondary{% endif %}">
+        전체
+    </a>
+</div>
+
 <p>
     총 매치 수: <strong>{{ total_matches }}</strong>
 </p>
@@ -18,7 +30,6 @@
             <th>선공</th>
             <th>승자</th>
             <th>패자</th>
-            <th>승차</th>
             <th>턴 수</th>
             <th>시작 시각</th>
             <th>종료 시각</th>
@@ -42,28 +53,21 @@
                 {{ row.loser_name }}
             </td>
             <td>
-                {% if m.win_gap is not none %}
-                    {{ m.win_gap }}
-                {% else %}
-                    -
-                {% endif %}
-            </td>
-            <td>
                 {% if m.total_rounds is not none %}
                     {{ m.total_rounds }}
                 {% else %}
                     -
                 {% endif %}
             </td>
-            <td>{{ m.started_at or "-" }}</td>
-            <td>{{ m.finished_at or "-" }}</td>
+            <td>{{ row.started_at }}</td>
+            <td>{{ row.finished_at }}</td>
             <td>
                 <a href="/records/{{ m.id }}" class="btn btn-sm btn-primary">상세</a>
             </td>
         </tr>
         {% else %}
         <tr>
-            <td colspan="11" class="text-center">
+            <td colspan="10" class="text-center">
                 아직 기록된 매치가 없습니다.
             </td>
         </tr>

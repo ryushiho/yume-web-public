@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_member_or_admin
 from app import models
+from app.utils.time import fmt_kst
 
 
 router = APIRouter(
@@ -30,6 +31,8 @@ def _resolve_display_name(
 ) -> str:
     if not discord_id:
         return "-"
+    if str(discord_id).strip().lower() == "yume":
+        return "유메"
     u = users_by_discord.get(discord_id)
     if u and u.nickname:
         return u.nickname
@@ -169,9 +172,9 @@ def list_bluewar_matches(
                 ),
                 "win_gap": match.win_gap,
                 "total_rounds": match.total_rounds,
-                "started_at": match.started_at,
-                "finished_at": match.finished_at,
-                "created_at": match.created_at,
+                "started_at": fmt_kst(match.started_at, "%Y-%m-%d %H:%M:%S"),
+                "finished_at": fmt_kst(match.finished_at, "%Y-%m-%d %H:%M:%S"),
+                "created_at": fmt_kst(match.created_at, "%Y-%m-%d %H:%M:%S"),
                 "pcount": int(pcount),
                 "note": match.note,
             }
@@ -260,6 +263,8 @@ def bluewar_match_detail(
             "match": match,
             "participants": view_parts,
             "is_admin": is_admin,
+            "started_at": fmt_kst(match.started_at, "%Y-%m-%d %H:%M:%S"),
+            "finished_at": fmt_kst(match.finished_at, "%Y-%m-%d %H:%M:%S"),
             "error": None,
         },
     )

@@ -41,7 +41,6 @@
               · 단어 수: <b>{{ meta.count }}</b>
               · 버전: <b>{{ meta.version }}</b>
               {% if meta.updated_at %}· 최근 수정: {{ meta.updated_at }}{% endif %}
-              {% if meta.sha256 %}· sha256: <code style="color:#e5e7eb;">{{ meta.sha256[:12] }}…</code>{% endif %}
             </div>
           </div>
           <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">

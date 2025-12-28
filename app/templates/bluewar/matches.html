@@ -97,8 +97,8 @@
       </td>
       <td>{{ m.pcount }}</td>
       <td style="font-size:0.85rem; color:#cbd5e1;">
-        {% if m.started_at %}S: {{ m.started_at.strftime("%Y-%m-%d %H:%M") }}{% else %}-{% endif %}<br/>
-        {% if m.finished_at %}E: {{ m.finished_at.strftime("%Y-%m-%d %H:%M") }}{% else %}-{% endif %}
+        S: {{ m.started_at if m.started_at else "-" }}<br/>
+        E: {{ m.finished_at if m.finished_at else "-" }}
       </td>
       <td style="font-size:0.85rem; color:#cbd5e1;">
         {% if m.note %}

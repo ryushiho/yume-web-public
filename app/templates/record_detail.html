@@ -40,11 +40,11 @@
         </tr>
         <tr>
             <th>시작 시각</th>
-            <td>{{ m.started_at }}</td>
+            <td>{{ started_at }}</td>
         </tr>
         <tr>
             <th>종료 시각</th>
-            <td>{{ m.finished_at }}</td>
+            <td>{{ finished_at }}</td>
         </tr>
         <tr>
             <th>시작 유저(디스코드 ID)</th>
@@ -57,10 +57,6 @@
         <tr>
             <th>패자(디스코드 ID)</th>
             <td>{{ m.loser_discord_id or "-" }}</td>
-        </tr>
-        <tr>
-            <th>승차</th>
-            <td>{{ m.win_gap if m.win_gap is not none else "-" }}</td>
         </tr>
         <tr>
             <th>비고</th>

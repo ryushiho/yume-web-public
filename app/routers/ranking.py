@@ -21,6 +21,16 @@ router = APIRouter(
 templates = Jinja2Templates(directory="app/templates")
 
 
+# 랭킹에서 제외할 내부 계정(봇/테스트 등)
+EXCLUDED_DISCORD_IDS = {"yume"}
+
+
+def _is_excluded_discord_id(discord_id: Optional[str]) -> bool:
+    if not discord_id:
+        return False
+    return (discord_id or "").strip().lower() in EXCLUDED_DISCORD_IDS
+
+
 class RankingRow(TypedDict):
     rank: int
     discord_id: str
@@ -80,7 +90,14 @@ def ranking_page(
     # ✅ PVP만 집계
     q = q.filter(models.BlueWarMatch.mode == mode)
 
-    matches: List[models.BlueWarMatch] = q.order_by(models.BlueWarMatch.id.desc()).all()
+    matches_all: List[models.BlueWarMatch] = q.order_by(models.BlueWarMatch.id.desc()).all()
+
+    # 방어: 혹시라도 PVP로 잘못 기록된 내부 계정 매치가 섞여 있으면 랭킹에서 통째로 제외한다.
+    matches: List[models.BlueWarMatch] = []
+    for m in matches_all:
+        if _is_excluded_discord_id(m.winner_discord_id) or _is_excluded_discord_id(m.loser_discord_id):
+            continue
+        matches.append(m)
 
     ids_from_matches: Set[str] = set()
     match_ids: List[int] = []
@@ -93,12 +110,15 @@ def ranking_page(
 
     # ✅ 랭킹은 "유저 테이블"도 같이 집계해야 한다.
     # - blue_records.json(기본 전적)만 있어도 랭킹이 떠야 함
-    users: List[models.User] = db.query(models.User).all()
+    users: List[models.User] = [u for u in db.query(models.User).all() if not _is_excluded_discord_id(u.discord_id)]
     users_by_discord: Dict[str, models.User] = {u.discord_id: u for u in users}
     ids_from_users: Set[str] = set(users_by_discord.keys())
 
     # 최종 집계 대상: (유저 테이블 + 매치에서 등장한 디스코드 ID)
     ids: Set[str] = set(ids_from_users) | set(ids_from_matches)
+
+    # 최종 방어: 제외 대상은 완전히 제거
+    ids = {did for did in ids if not _is_excluded_discord_id(did)}
 
     fallback_names_by_discord: Dict[str, str] = {}
     if match_ids:

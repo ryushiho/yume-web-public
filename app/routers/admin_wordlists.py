@@ -28,6 +28,8 @@ from app.routers.api_wordlists import (
     _current_version,
 )
 
+from app.utils.time import fmt_kst
+
 
 router = APIRouter(prefix="/admin/wordlists", tags=["admin-wordlists"])
 templates = Jinja2Templates(directory="app/templates")
@@ -48,7 +50,7 @@ def _meta_for(db: Session, list_name: str) -> Dict[str, Optional[str]]:
         "list_name": list_name,
         "filename": ALLOWED_LISTS[list_name],
         "count": str(count),
-        "updated_at": last_updated.isoformat() if last_updated else None,
+        "updated_at": fmt_kst(last_updated, "%Y-%m-%d %H:%M:%S") if last_updated else None,
         "version": str(version),
         "sha256": _sha256(txt),
     }
