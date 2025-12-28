@@ -25,3 +25,5 @@ app/admins.json
 
 # caches
 __pycache__/
+id_rsa
+id_rsa.pub
