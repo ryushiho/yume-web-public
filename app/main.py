@@ -70,7 +70,10 @@ async def require_login_for_ui(request: Request, call_next):
         return await call_next(request)
 
     # 3) 그 외는 로그인 강제
-    if not request.session.get("user") and not request.session.get("member"):
+    #    ⚠️ SessionMiddleware가 아직 실행되기 전에는 request.session 속성이 없을 수 있다.
+    #    그래서 scope의 session을 안전하게 읽는다.
+    session = request.scope.get("session") or {}
+    if not session.get("user") and not session.get("member"):
         return RedirectResponse(url="/member/login", status_code=303)
 
     return await call_next(request)
