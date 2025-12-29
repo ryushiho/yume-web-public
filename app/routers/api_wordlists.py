@@ -63,10 +63,13 @@ router = APIRouter(
 )
 
 
-# Phase 1 기준: 웹에서 관리할 리스트 2개(파일명 기준)
+# Phase 1 기준: 웹에서 관리할 리스트.
+# - suggestion / blue_archive_words: 봇에서 사용하는 핵심 리스트
+# - public_words: 공개 "단어 보기"(/words) 전용 리스트 (관리자 TXT 업로드 가능)
 ALLOWED_LISTS = {
     "suggestion": "suggestion.txt",
     "blue_archive_words": "blue_archive_words.txt",
+    "public_words": "public_words.txt",
 }
 
 

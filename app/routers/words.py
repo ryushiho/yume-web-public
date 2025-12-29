@@ -58,7 +58,25 @@ def words_page(
     - 보기/검색만 제공 (추가/수정/삭제는 관리자 페이지에서만)
     """
 
-    list_name = (request.query_params.get("list") or "suggestion").strip()
+    # 기본은 suggestion이지만, 공개용 리스트(public_words)가 있고 단어가 존재하면 그쪽을 기본으로 쓴다.
+    list_param = request.query_params.get("list")
+    if list_param is None or not str(list_param).strip():
+        default_list = "suggestion"
+        if "public_words" in ALLOWED_LISTS:
+            try:
+                has_any = (
+                    db.query(models.BlueWarWord.id)
+                    .filter(models.BlueWarWord.list_name == "public_words")
+                    .first()
+                    is not None
+                )
+            except Exception:
+                has_any = False
+            if has_any:
+                default_list = "public_words"
+        list_name = default_list
+    else:
+        list_name = str(list_param).strip()
     q = (request.query_params.get("q") or "").strip()
 
     try:
