@@ -216,6 +216,7 @@ def list_bluewar_matches(
                 "display_id": f"#{disp_num}",
                 "mode": match.mode,
                 "mode_label": _mode_label(match.mode),
+                "source_app": getattr(match, "source_app", None) or "-",
                 "status": match.status,
                 "starter": _resolve_display_name(
                     discord_id=match.starter_discord_id,

@@ -111,6 +111,11 @@ class BlueWarMatch(Base):
     # finished / aborted 같은 상태
     status = Column(String(20), nullable=False, default="finished")
 
+    # 어떤 봇/앱에서 올라온 전적인지 (예: "shiho", "yume")
+    # - UI 필터/표시용
+    # - 실제 DB 컬럼은 app/schema.py의 ensure_sqlite_schema(engine)로 자동 보정된다.
+    source_app = Column(String(32), nullable=False, default="shiho")
+
     starter_discord_id = Column(String(32), nullable=False)
     winner_discord_id = Column(String(32), nullable=True)
     loser_discord_id = Column(String(32), nullable=True)
