@@ -55,13 +55,94 @@
   </div>
 
   <div class="card" style="margin-top:1rem;">
-    <h3 style="margin:0 0 0.6rem 0;">복기 로그</h3>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap;">
+      <h3 style="margin:0;">복기 로그</h3>
+      {% if match.review_log %}
+        <div style="color:#9ca3af; font-size:0.85rem;">{{ match.review_log|length }} 글자</div>
+      {% endif %}
+    </div>
+
     {% if match.review_log %}
-      <pre style="white-space:pre-wrap; word-break:break-word; background:#0b1220; border:1px solid #1f2937; border-radius:0.8rem; padding:0.8rem; margin:0;">{{ match.review_log }}</pre>
+      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-top:0.75rem;">
+        <button type="button" class="btn" id="review-copy">복기 복사</button>
+        <input id="review-search" type="text" placeholder="복기 로그 검색" style="min-width:220px; flex:1;" />
+        <div id="review-match-count" style="color:#9ca3af; font-size:0.85rem;"></div>
+      </div>
+
+      <pre id="review-pre" style="white-space:pre-wrap; word-break:break-word; background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.08); border-radius:12px; font-size:0.9rem; padding:0.8rem; margin:0.75rem 0 0 0; max-height:520px; overflow:auto;">{{ match.review_log }}</pre>
+
+      <script>
+      (function(){
+        const pre = document.getElementById("review-pre");
+        const original = pre ? pre.textContent : "";
+        const btn = document.getElementById("review-copy");
+        const input = document.getElementById("review-search");
+        const counter = document.getElementById("review-match-count");
+
+        function escapeHtml(s){
+          return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+        }
+        function escapeRegExp(s){
+          return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        }
+        function setText(el, text){
+          if(el) el.textContent = text;
+        }
+        function render(q){
+          q = (q || "").trim();
+          if(!pre) return;
+          if(!q){
+            pre.textContent = original;
+            setText(counter, "");
+            return;
+          }
+          const re = new RegExp(escapeRegExp(q), "gi");
+          const matches = original.match(re);
+          const n = matches ? matches.length : 0;
+          setText(counter, n ? (n + "개 일치") : "일치 없음");
+          const html = escapeHtml(original).replace(re, function(m){
+            return '<mark style="background:rgba(250, 204, 21, 0.25); color:inherit; padding:0 2px; border-radius:4px;">' + m + "</mark>";
+          });
+          pre.innerHTML = html;
+        }
+
+        if(btn){
+          btn.addEventListener("click", async function(){
+            const text = original || "";
+            try{
+              if(navigator.clipboard && navigator.clipboard.writeText){
+                await navigator.clipboard.writeText(text);
+              }else{
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                ta.style.position = "fixed";
+                ta.style.left = "-9999px";
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+              }
+              const old = btn.textContent;
+              btn.textContent = "복사됨!";
+              setTimeout(()=>{ btn.textContent = old; }, 1200);
+            }catch(e){
+              const old = btn.textContent;
+              btn.textContent = "복사 실패";
+              setTimeout(()=>{ btn.textContent = old; }, 1200);
+            }
+          });
+        }
+        if(input){
+          input.addEventListener("input", function(){ render(input.value); });
+        }
+      })();
+      </script>
     {% else %}
-      <div style="color:#9ca3af;">복기 로그가 아직 없어.</div>
+      <div style="color:#9ca3af; margin-top:0.6rem;">복기 로그가 아직 없어.</div>
     {% endif %}
   </div>
+
 
   {# 메모(note)는 공개 화면에서 노출하지 않음 #}
 {% endif %}
