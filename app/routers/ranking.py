@@ -67,6 +67,7 @@ def ranking_page(
     db: Session = Depends(get_db),
     _viewer=Depends(get_current_member_or_admin),
     limit: int = 50,
+    source_app: str = "shiho",
 ):
     """블루전 랭킹.
 
@@ -83,6 +84,11 @@ def ranking_page(
     mode = "pvp"
 
     q = db.query(models.BlueWarMatch)
+
+    source_app = (source_app or "shiho").strip().lower()
+    if source_app != "all":
+        q = q.filter(models.BlueWarMatch.source_app == source_app)
+
     # "완료"된 매치만 집계 (winner/loser가 있는 경우)
     q = q.filter(models.BlueWarMatch.winner_discord_id.isnot(None))
     q = q.filter(models.BlueWarMatch.loser_discord_id.isnot(None))
@@ -223,5 +229,7 @@ def ranking_page(
             "request": request,
             "rows": ranked,
             "mode": mode,
+            "limit": limit,
+            "source_app": source_app,
         },
     )

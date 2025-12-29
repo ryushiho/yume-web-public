@@ -39,6 +39,9 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
+    # 어떤 봇/앱에서 올라온 전적인지 (예: "shiho")
+    source_app = Column(String(32), nullable=False, default="shiho")
+
     # 디스코드 ID (snowflake)
     discord_id = Column(String(32), unique=True, nullable=False)
 

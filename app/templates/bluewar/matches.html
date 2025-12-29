@@ -27,6 +27,15 @@
       </select>
     </div>
 
+    <div>
+      <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">봇</div>
+      <select name="source_app">
+        <option value="all" {% if source_app == "all" %}selected{% endif %}>전체</option>
+        <option value="shiho" {% if source_app == "shiho" %}selected{% endif %}>Shiho</option>
+        <option value="yume" {% if source_app == "yume" %}selected{% endif %}>Yume(구)</option>
+      </select>
+    </div>
+
     <div style="flex:1; min-width:240px;">
       <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">검색</div>
       <input
@@ -51,6 +60,7 @@
   <thead>
     <tr>
       <th style="width:80px;">ID</th>
+      <th style="width:90px;">봇</th>
       <th style="width:90px;">모드</th>
       <th style="width:110px;">상태</th>
       <th>선공</th>
@@ -76,6 +86,7 @@
           </div>
         {% endif %}
       </td>
+      <td>{{ m.source_app }}</td>
       <td>{{ m.mode_label }}</td>
       <td>{{ m.status }}</td>
       <td>{{ m.starter }}</td>
@@ -115,22 +126,22 @@
     {% set next_page = page + 1 %}
 
     <a
-      href="/bluewar/matches/?mode={{ mode }}&status={{ status }}&q={{ q }}&page_size={{ page_size }}&page=1"
+      href="/bluewar/matches/?mode={{ mode }}&status={{ status }}&source_app={{ source_app }}&q={{ q }}&page_size={{ page_size }}&page=1"
       style="padding:0.35rem 0.6rem; border:1px solid #1f2937; border-radius:0.6rem; text-decoration:none; color:#e5e7eb; background:#0b1220;"
     >처음</a>
 
     <a
-      href="/bluewar/matches/?mode={{ mode }}&status={{ status }}&q={{ q }}&page_size={{ page_size }}&page={{ prev_page if prev_page >= 1 else 1 }}"
+      href="/bluewar/matches/?mode={{ mode }}&status={{ status }}&source_app={{ source_app }}&q={{ q }}&page_size={{ page_size }}&page={{ prev_page if prev_page >= 1 else 1 }}"
       style="padding:0.35rem 0.6rem; border:1px solid #1f2937; border-radius:0.6rem; text-decoration:none; color:#e5e7eb; background:#0b1220;"
     >이전</a>
 
     <a
-      href="/bluewar/matches/?mode={{ mode }}&status={{ status }}&q={{ q }}&page_size={{ page_size }}&page={{ next_page if next_page <= total_pages else total_pages }}"
+      href="/bluewar/matches/?mode={{ mode }}&status={{ status }}&source_app={{ source_app }}&q={{ q }}&page_size={{ page_size }}&page={{ next_page if next_page <= total_pages else total_pages }}"
       style="padding:0.35rem 0.6rem; border:1px solid #1f2937; border-radius:0.6rem; text-decoration:none; color:#e5e7eb; background:#0b1220;"
     >다음</a>
 
     <a
-      href="/bluewar/matches/?mode={{ mode }}&status={{ status }}&q={{ q }}&page_size={{ page_size }}&page={{ total_pages }}"
+      href="/bluewar/matches/?mode={{ mode }}&status={{ status }}&source_app={{ source_app }}&q={{ q }}&page_size={{ page_size }}&page={{ total_pages }}"
       style="padding:0.35rem 0.6rem; border:1px solid #1f2937; border-radius:0.6rem; text-decoration:none; color:#e5e7eb; background:#0b1220;"
     >끝</a>
   </div>

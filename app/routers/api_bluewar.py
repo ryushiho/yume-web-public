@@ -1,6 +1,7 @@
 # app/routers/api_bluewar.py
 
 from datetime import datetime
+import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -62,6 +63,7 @@ class BlueWarParticipantIn(BaseModel):
 class BlueWarMatchIn(BaseModel):
     mode: str
     status: str
+    source_app: Optional[str] = None  # 어떤 봇/앱에서 올라왔는지 (예: shiho)
     starter_discord_id: str
     winner_discord_id: Optional[str] = None
     loser_discord_id: Optional[str] = None
@@ -110,9 +112,17 @@ async def create_match(
     status = (data.status or "").strip().lower() or "unknown"
 
     # 1) 매치 기본 정보 저장
+    
+    # source_app 정규화 (기본: shiho)
+    source_app = (data.source_app or "").strip().lower()
+    if not source_app:
+        source_app = "shiho"
+    # 안전하게: 영문/숫자/_/-만 허용
+    source_app = re.sub(r"[^a-z0-9_-]", "", source_app)[:32] or "shiho"
     match = models.BlueWarMatch(
         mode=mode,
         status=status,
+        source_app=source_app,
         starter_discord_id=data.starter_discord_id,
         winner_discord_id=data.winner_discord_id,
         loser_discord_id=data.loser_discord_id,

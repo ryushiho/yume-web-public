@@ -77,6 +77,7 @@ def list_bluewar_matches(
     viewer=Depends(get_current_member_or_admin),
     mode: str = Query(default="all", description="all|pvp|practice"),
     status: str = Query(default="all", description="all|finished|aborted|running"),
+    source_app: str = Query(default="shiho", description="all|shiho|..."),
     q: str = Query(default="", description="검색어(Discord ID/복기 로그)"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=10, le=200),
@@ -115,6 +116,10 @@ def list_bluewar_matches(
     status = (status or "all").strip().lower()
     if status in ("finished", "aborted", "running"):
         query = query.filter(models.BlueWarMatch.status == status)
+    source_app = (source_app or "shiho").strip().lower()
+    if source_app != "all":
+        query = query.filter(models.BlueWarMatch.source_app == source_app)
+
 
     q = (q or "").strip()
     if q:
@@ -248,6 +253,7 @@ def list_bluewar_matches(
             "total_pages": total_pages,
             "mode": mode,
             "status": status,
+            "source_app": source_app,
             "q": q,
         },
     )

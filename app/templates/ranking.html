@@ -11,6 +11,24 @@
     정렬: <strong>승차(총 승-총 패)</strong> → <strong>총 승</strong> → <strong>총 전적</strong> (0전은 맨 아래)
 </p>
 
+<form method="get" style="display:flex; gap:0.8rem; align-items:flex-end; flex-wrap:wrap; margin:0.3rem 0 1rem 0;">
+  <div>
+    <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">봇</div>
+    <select name="source_app">
+      <option value="shiho" {% if source_app == "shiho" %}selected{% endif %}>Shiho</option>
+      <option value="all" {% if source_app == "all" %}selected{% endif %}>전체</option>
+      <option value="yume" {% if source_app == "yume" %}selected{% endif %}>Yume(구)</option>
+    </select>
+  </div>
+  <div>
+    <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">상위 N</div>
+    <input type="number" name="limit" value="{{ limit }}" min="1" max="200" style="width:110px;" />
+  </div>
+  <div>
+    <button class="btn btn-primary" type="submit">적용</button>
+  </div>
+</form>
+
 <table>
     <thead>
     <tr>

@@ -22,6 +22,11 @@ def ensure_sqlite_schema(engine: Engine) -> None:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE member_users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0;"))
 
+    # bluewar_matches.source_app (어느 봇에서 올라온 전적인지)
+    if not _has_column(engine, "bluewar_matches", "source_app"):
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE bluewar_matches ADD COLUMN source_app VARCHAR(32) NOT NULL DEFAULT 'shiho';"))
+
     # app_meta 테이블은 create_all로 생성되지만, 안전망으로 한 번 더
     with engine.begin() as conn:
         conn.execute(text(
