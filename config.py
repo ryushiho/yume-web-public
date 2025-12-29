@@ -25,6 +25,9 @@ class Settings:
         # - 디스코드 봇에서 X-API-Token 헤더로 보내면 된다.
         self.API_TOKEN = os.getenv("YUME_API_TOKEN") or os.getenv("YUME_ADMIN_API_TOKEN")
 
+        # 아비도스 미니게임 동기화 API 토큰 (Authorization: Bearer <token>)
+        self.ABY_SYNC_TOKEN = os.getenv("YUME_ABY_SYNC_TOKEN") or os.getenv("YUME_ABY_API_TOKEN")
+
         # 유메 초대 링크 (홈 화면에서 사용)
         self.INVITE_URL = os.getenv("YUME_INVITE_URL", "#")
 

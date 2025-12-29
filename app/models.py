@@ -253,3 +253,110 @@ class BlueWarWordListSnapshot(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
+
+
+# ============================
+# Abydos Mini-game (Aby) tables
+# - Bot -> Web sync payload
+# ============================
+
+
+class AbyGuildState(Base):
+    __tablename__ = "aby_guild_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Discord guild id (string for safety / future migration)
+    guild_id = Column(String(30), unique=True, index=True, nullable=False)
+    guild_name = Column(String(120), nullable=True)
+
+    debt = Column(Integer, nullable=False, default=0)
+    interest_rate = Column(Float, nullable=False, default=0.0)
+    last_interest_ymd = Column(String(20), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+
+
+class AbyUserEconomy(Base):
+    __tablename__ = "aby_user_economy"
+    __table_args__ = (
+        UniqueConstraint("guild_id", "user_id", name="uq_aby_user_economy_guild_user"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    guild_id = Column(String(30), index=True, nullable=False)
+    user_id = Column(String(30), index=True, nullable=False)
+    nickname = Column(String(120), nullable=True)
+
+    credits = Column(Integer, nullable=False, default=0)
+    water = Column(Integer, nullable=False, default=0)
+    last_explore_ymd = Column(String(20), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+
+
+class AbyExploreLog(Base):
+    __tablename__ = "aby_explore_logs"
+    __table_args__ = (
+        UniqueConstraint("guild_id", "source_id", name="uq_aby_explore_logs_guild_source"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    guild_id = Column(String(30), index=True, nullable=False)
+    source_id = Column(String(80), index=True, nullable=False)  # stable id from bot (or hash)
+    user_id = Column(String(30), index=True, nullable=True)
+    nickname = Column(String(120), nullable=True)
+
+    date_ymd = Column(String(20), nullable=True)
+    weather = Column(String(20), nullable=True)
+    success = Column(Integer, nullable=False, default=0)
+
+    delta_credits = Column(Integer, nullable=False, default=0)
+    delta_water = Column(Integer, nullable=False, default=0)
+
+    summary = Column(Text, nullable=True)
+    raw_json = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class AbyIncidentLog(Base):
+    __tablename__ = "aby_incident_logs"
+    __table_args__ = (
+        UniqueConstraint("guild_id", "source_id", name="uq_aby_incident_logs_guild_source"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    guild_id = Column(String(30), index=True, nullable=False)
+    source_id = Column(String(80), index=True, nullable=False)
+
+    kind = Column(String(40), nullable=False, default="incident")
+    title = Column(String(120), nullable=False, default="")
+    description = Column(Text, nullable=False, default="")
+    delta_debt = Column(Integer, nullable=False, default=0)
+
+    raw_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class AbyWeeklySummary(Base):
+    __tablename__ = "aby_weekly_summaries"
+    __table_args__ = (
+        UniqueConstraint("guild_id", "week_key", name="uq_aby_weekly_summaries_guild_week"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    guild_id = Column(String(30), index=True, nullable=False)
+    week_key = Column(String(20), index=True, nullable=False)
+
+    debt_summary_json = Column(Text, nullable=True)
+    points_ranking_json = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
