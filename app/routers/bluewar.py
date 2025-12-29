@@ -58,7 +58,7 @@ def list_bluewar_matches(
     request: Request,
     db: Session = Depends(get_db),
     viewer=Depends(get_current_member_or_admin),
-    mode: str = Query(default="pvp", description="(고정) pvp"),
+    mode: str = Query(default="all", description="all|pvp|practice"),
     status: str = Query(default="all", description="all|finished|aborted|running"),
     source_app: str = Query(default="shiho", description="all|shiho|..."),
     q: str = Query(default="", description="검색어(Discord ID/복기 로그)"),
@@ -88,9 +88,9 @@ def list_bluewar_matches(
         )
         .outerjoin(pcount_subq, pcount_subq.c.match_id == models.BlueWarMatch.id)
     )
-    # 화면/집계 정책: PVP만 제공한다 (mode 파라미터는 무시)
-    mode = "pvp"
-    query = query.filter(models.BlueWarMatch.mode == mode)
+    # mode 필터: all이면 전체, 그 외(pvp/practice)는 해당 모드만
+    if (mode or '').strip().lower() != 'all':
+        query = query.filter(models.BlueWarMatch.mode == mode)
     status = (status or "all").strip().lower()
     if status in ("finished", "aborted", "running"):
         query = query.filter(models.BlueWarMatch.status == status)
@@ -213,6 +213,7 @@ def list_bluewar_matches(
         {
             "request": request,
             "viewer": viewer,
+            "mode": mode,
             "matches": matches,
             "total": total,
             "page": page,
