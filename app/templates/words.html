@@ -11,24 +11,55 @@
 </p>
 
 <form method="get" action="/words/" class="filters" style="margin-bottom:1.0rem;">
+    <input type="hidden" name="page" value="1" />
+
     <div class="field grow">
         <div class="label">검색</div>
         <input type="text" name="q" value="{{ q }}" placeholder="단어 포함 검색" />
     </div>
 
-    <input type="hidden" name="page_size" value="{{ page_size }}" />
-    <button class="btn btn-primary" type="submit">검색</button>
+    <div class="field">
+        <div class="label">정렬</div>
+        <select name="sort">
+            {% for key, label in sort_options %}
+                <option value="{{ key }}" {% if sort == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="field">
+        <div class="label">표시 개수</div>
+        <select name="page_size">
+            {% for ps in page_size_options %}
+                <option value="{{ ps }}" {% if page_size == ps %}selected{% endif %}>{{ ps }}개</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <button class="btn btn-primary" type="submit">적용</button>
 </form>
 
-<div class="hint" style="margin-bottom:1.0rem;">
-    <strong>{{ list_label }}</strong> · v{{ meta.version }} · {{ meta.count }}개
+<div class="hint" style="margin-bottom:0.75rem;">
+    <strong>{{ list_label }}</strong>
+    · v{{ meta.version }}
+    · 전체 {{ meta.count }}개
+    {% if meta.updated_at %}
+        · 업데이트 {{ meta.updated_at[:10] }}
+    {% endif %}
 </div>
+
+{% if q %}
+<div style="margin-bottom:0.75rem; color:#9ca3af;">
+    검색어 <strong style="color:#E6E3DE;">“{{ q }}”</strong> 결과: <strong style="color:#E6E3DE;">{{ total }}</strong>개
+</div>
+{% endif %}
 
 <table>
     <thead>
     <tr>
         <th style="width:120px;">번호</th>
         <th>단어</th>
+        <th style="width:140px;">글자수</th>
     </tr>
     </thead>
     <tbody>
@@ -36,10 +67,11 @@
         <tr>
             <td>{{ offset + loop.index }}</td>
             <td style="font-weight:600;">{{ row.word }}</td>
+            <td style="color:#9ca3af;">{{ row.word|length }}</td>
         </tr>
     {% else %}
         <tr>
-            <td colspan="2" style="color:#9ca3af;">검색 결과가 없습니다.</td>
+            <td colspan="3" style="color:#9ca3af;">검색 결과가 없습니다.</td>
         </tr>
     {% endfor %}
     </tbody>
@@ -50,11 +82,25 @@
     <span style="color:#9ca3af;">페이지 {{ page }} / {{ total_pages }}</span>
 
     {% if page > 1 %}
-        <a class="btn btn-secondary" href="/words/?q={{ q }}&page={{ page - 1 }}&page_size={{ page_size }}">이전</a>
+        <a class="btn btn-secondary" href="/words/?{{ qs_base }}&page={{ page - 1 }}">이전</a>
     {% endif %}
 
+    <div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap;">
+        {% for p in page_items %}
+            {% if p is none %}
+                <span style="padding:0 0.35rem; color:#9ca3af;">…</span>
+            {% else %}
+                {% if p == page %}
+                    <span class="btn btn-primary" style="cursor:default; opacity:0.95;">{{ p }}</span>
+                {% else %}
+                    <a class="btn btn-secondary" href="/words/?{{ qs_base }}&page={{ p }}">{{ p }}</a>
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+    </div>
+
     {% if page < total_pages %}
-        <a class="btn btn-secondary" href="/words/?q={{ q }}&page={{ page + 1 }}&page_size={{ page_size }}">다음</a>
+        <a class="btn btn-secondary" href="/words/?{{ qs_base }}&page={{ page + 1 }}">다음</a>
     {% endif %}
 </div>
 
