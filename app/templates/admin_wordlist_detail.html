@@ -1,12 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}단어 DB - {{ meta.filename }}{% endblock %}
+{% block title %}단어 DB - {{ list_label }}{% endblock %}
 {% block header_title %}단어 DB{% endblock %}
 
 {% block content %}
   <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
     <div>
-      <h1 style="margin-bottom:0.25rem;">{{ meta.filename }}</h1>
+      <h1 style="margin-bottom:0.25rem;">
+        {{ list_label }}
+        <span style="color:#9ca3af; font-weight:500; font-size:0.9rem;">({{ meta.filename }})</span>
+      </h1>
       <div style="color:#9ca3af; font-size:0.9rem;">
         리스트 키: <code style="color:#e5e7eb;">{{ list_name }}</code>
         · 단어 수: <b>{{ meta.count }}</b>

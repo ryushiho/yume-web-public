@@ -11,15 +11,6 @@
 </p>
 
 <form method="get" action="/words/" class="filters" style="margin-bottom:1.0rem;">
-    <div class="field">
-        <div class="label">리스트</div>
-        <select name="list">
-            {% for n in allowed_lists %}
-                <option value="{{ n }}" {% if n == list_name %}selected{% endif %}>{{ n }}</option>
-            {% endfor %}
-        </select>
-    </div>
-
     <div class="field grow">
         <div class="label">검색</div>
         <input type="text" name="q" value="{{ q }}" placeholder="단어 포함 검색" />
@@ -30,7 +21,7 @@
 </form>
 
 <div class="hint" style="margin-bottom:1.0rem;">
-    현재 리스트: <strong>{{ list_name }}</strong> · v{{ meta.version }} · {{ meta.count }}개
+    <strong>{{ list_label }}</strong> · v{{ meta.version }} · {{ meta.count }}개
 </div>
 
 <table>
@@ -59,11 +50,11 @@
     <span style="color:#9ca3af;">페이지 {{ page }} / {{ total_pages }}</span>
 
     {% if page > 1 %}
-        <a class="btn btn-secondary" href="/words/?list={{ list_name }}&q={{ q }}&page={{ page - 1 }}&page_size={{ page_size }}">이전</a>
+        <a class="btn btn-secondary" href="/words/?q={{ q }}&page={{ page - 1 }}&page_size={{ page_size }}">이전</a>
     {% endif %}
 
     {% if page < total_pages %}
-        <a class="btn btn-secondary" href="/words/?list={{ list_name }}&q={{ q }}&page={{ page + 1 }}&page_size={{ page_size }}">다음</a>
+        <a class="btn btn-secondary" href="/words/?q={{ q }}&page={{ page + 1 }}&page_size={{ page_size }}">다음</a>
     {% endif %}
 </div>
 

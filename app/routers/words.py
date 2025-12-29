@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.dependencies import get_db
 from app.routers.api_wordlists import ALLOWED_LISTS, _assert_list_name, _current_version
+from app.utils.wordlists import WORDLIST_LABELS
 
 
 router = APIRouter(prefix="/words", tags=["words"])
@@ -58,25 +59,9 @@ def words_page(
     - 보기/검색만 제공 (추가/수정/삭제는 관리자 페이지에서만)
     """
 
-    # 기본은 suggestion이지만, 공개용 리스트(public_words)가 있고 단어가 존재하면 그쪽을 기본으로 쓴다.
-    list_param = request.query_params.get("list")
-    if list_param is None or not str(list_param).strip():
-        default_list = "suggestion"
-        if "public_words" in ALLOWED_LISTS:
-            try:
-                has_any = (
-                    db.query(models.BlueWarWord.id)
-                    .filter(models.BlueWarWord.list_name == "public_words")
-                    .first()
-                    is not None
-                )
-            except Exception:
-                has_any = False
-            if has_any:
-                default_list = "public_words"
-        list_name = default_list
-    else:
-        list_name = str(list_param).strip()
+    # 공개 단어 보기(/words)는 "public_words"만 노출한다.
+    # (다른 리스트는 봇 내부/관리자 전용이라 외부에 보여줄 필요가 없다.)
+    list_name = "public_words" if "public_words" in ALLOWED_LISTS else "suggestion"
     q = (request.query_params.get("q") or "").strip()
 
     try:
@@ -94,8 +79,8 @@ def words_page(
     if page_size > 1000:
         page_size = 1000
 
-    metas = {n: _meta_for_public(db, n) for n in ALLOWED_LISTS.keys()}
-    meta = metas.get(name) or _meta_for_public(db, name)
+    metas = {name: _meta_for_public(db, name)}
+    meta = metas.get(name)
 
     base = db.query(models.BlueWarWord).filter(models.BlueWarWord.list_name == name)
     if q:
@@ -118,8 +103,10 @@ def words_page(
         "words.html",
         {
             "request": request,
-            "allowed_lists": list(ALLOWED_LISTS.keys()),
+            "allowed_lists": [list_name],
+            "list_labels": WORDLIST_LABELS,
             "list_name": name,
+            "list_label": WORDLIST_LABELS.get(name, ALLOWED_LISTS.get(name, name)),
             "q": q,
             "page": page,
             "page_size": page_size,

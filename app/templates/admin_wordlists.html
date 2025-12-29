@@ -34,7 +34,8 @@
         <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
           <div>
             <div style="font-weight:700; font-size:1.05rem;">
-              {{ meta.filename }}
+              {{ list_labels.get(key, meta.filename) }}
+              <span style="color:#9ca3af; font-weight:500; font-size:0.9rem;">({{ meta.filename }})</span>
             </div>
             <div style="color:#9ca3af; font-size:0.85rem; margin-top:0.2rem;">
               리스트 키: <code style="color:#e5e7eb;">{{ key }}</code>

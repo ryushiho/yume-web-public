@@ -29,6 +29,7 @@ from app.routers.api_wordlists import (
 )
 
 from app.utils.time import fmt_kst
+from app.utils.wordlists import WORDLIST_LABELS
 
 
 router = APIRouter(prefix="/admin/wordlists", tags=["admin-wordlists"])
@@ -104,6 +105,7 @@ def admin_wordlists_page(
         {
             "request": request,
             "metas": metas,
+            "list_labels": WORDLIST_LABELS,
             "ok": ok,
             "error": error,
             "which": which,
@@ -176,6 +178,8 @@ def admin_wordlist_detail(
             "request": request,
             "list_name": name,
             "meta": meta,
+            "list_labels": WORDLIST_LABELS,
+            "list_label": WORDLIST_LABELS.get(name, ALLOWED_LISTS.get(name, name)),
             "versions": versions,
             "q": q,
             "page": page,
