@@ -1,28 +1,20 @@
 # app/routers/bluewar.py
 from __future__ import annotations
-
 import math
 from typing import Dict, List, Optional, Set, Tuple
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
-
 from app.dependencies import get_db, get_current_member_or_admin
 from app import models
 from app.utils.time import fmt_kst
-
-
 router = APIRouter(
     prefix="/bluewar",
     tags=["bluewar"],
 )
-
 templates = Jinja2Templates(directory="app/templates")
-
-
 def _resolve_display_name(
     *,
     discord_id: Optional[str],
@@ -39,15 +31,11 @@ def _resolve_display_name(
     if discord_id in fallback_names_by_discord:
         return fallback_names_by_discord[discord_id]
     return discord_id
-
-
 def _mode_label(mode: str, *, ai_label: Optional[str] = None) -> str:
     """UI 표시용 모드 라벨.
-
     - pvp -> PVP
     - practice -> 연습 (AI/난이도가 있으면 괄호로 표시)
     """
-
     m = (mode or "").strip().lower()
     if m == "pvp":
         return "PVP"
@@ -59,23 +47,18 @@ def _mode_label(mode: str, *, ai_label: Optional[str] = None) -> str:
             return f"연습 ({label})"
         return "연습"
     return mode
-
-
 def _display_id_number(mode: str, seq: int) -> int:
     """요구사항: PVP는 #1부터, PVBOT(연습)은 #10001부터."""
-
     m = (mode or "").strip().lower()
     if m == "practice":
         return 10000 + int(seq)
     return int(seq)
-
-
 @router.get("/matches/", response_class=HTMLResponse)
 def list_bluewar_matches(
     request: Request,
     db: Session = Depends(get_db),
     viewer=Depends(get_current_member_or_admin),
-    mode: str = Query(default="all", description="all|pvp|practice"),
+    mode: str = Query(default="pvp", description="(고정) pvp"),
     status: str = Query(default="all", description="all|finished|aborted|running"),
     source_app: str = Query(default="shiho", description="all|shiho|..."),
     q: str = Query(default="", description="검색어(Discord ID/복기 로그)"),
@@ -84,13 +67,11 @@ def list_bluewar_matches(
 ):
     """
     블루전 매치 목록 페이지 (/bluewar/matches/)
-
     - 필터: mode/status
     - 검색: starter/winner/loser discord_id, note, review_log
     - 페이지네이션
     - 참가자 수 표시
     """
-
     # 참가자 수 서브쿼리(매치 1건당 1row)
     pcount_subq = (
         db.query(
@@ -100,7 +81,6 @@ def list_bluewar_matches(
         .group_by(models.BlueWarParticipant.match_id)
         .subquery()
     )
-
     query = (
         db.query(
             models.BlueWarMatch,
@@ -108,19 +88,15 @@ def list_bluewar_matches(
         )
         .outerjoin(pcount_subq, pcount_subq.c.match_id == models.BlueWarMatch.id)
     )
-
-    mode = (mode or "all").strip().lower()
-    if mode in ("pvp", "practice"):
-        query = query.filter(models.BlueWarMatch.mode == mode)
-
+    # 화면/집계 정책: PVP만 제공한다 (mode 파라미터는 무시)
+    mode = "pvp"
+    query = query.filter(models.BlueWarMatch.mode == mode)
     status = (status or "all").strip().lower()
     if status in ("finished", "aborted", "running"):
         query = query.filter(models.BlueWarMatch.status == status)
     source_app = (source_app or "shiho").strip().lower()
     if source_app != "all":
         query = query.filter(models.BlueWarMatch.source_app == source_app)
-
-
     q = (q or "").strip()
     if q:
         like = f"%{q}%"
@@ -133,23 +109,19 @@ def list_bluewar_matches(
                 models.BlueWarMatch.review_log.ilike(like),
             )
         )
-
     query = query.order_by(
         models.BlueWarMatch.created_at.desc().nullslast(),
         models.BlueWarMatch.id.desc(),
     )
-
     total = query.count()
     total_pages = max(1, math.ceil(total / page_size))
     if page > total_pages:
         page = total_pages
-
     rows: List[Tuple[models.BlueWarMatch, int]] = (
         query.offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
-
     # 표시용: 모드별 시퀀스 번호 (PVP는 1부터, 연습은 1부터 -> 화면에서는 10001부터)
     match_ids_for_seq = [int(m.id) for m, _pc in rows]
     seq_by_match_id: Dict[int, int] = {}
@@ -166,14 +138,12 @@ def list_bluewar_matches(
                 .label("seq"),
             )
         ).subquery()
-
         rows_seq = (
             db.query(seq_subq.c.id, seq_subq.c.seq)
             .filter(seq_subq.c.id.in_(match_ids_for_seq))
             .all()
         )
         seq_by_match_id = {int(r.id): int(r.seq) for r in rows_seq}
-
     # 표시 이름 resolve (User.nickname 우선, 없으면 Participant.name fallback)
     discord_ids: Set[str] = set()
     for match, _pcount in rows:
@@ -183,12 +153,10 @@ def list_bluewar_matches(
             discord_ids.add(match.winner_discord_id)
         if match.loser_discord_id:
             discord_ids.add(match.loser_discord_id)
-
     users_by_discord: Dict[str, models.User] = {}
     if discord_ids:
         for u in db.query(models.User).filter(models.User.discord_id.in_(list(discord_ids))).all():
             users_by_discord[u.discord_id] = u
-
     fallback_names_by_discord: Dict[str, str] = {}
     if discord_ids:
         # 같은 discord_id가 여러 번 있을 수 있으니, 최신(큰 id) 것을 우선으로 잡는다.
@@ -205,7 +173,6 @@ def list_bluewar_matches(
                 continue
             if p.name:
                 fallback_names_by_discord[p.discord_id] = p.name
-
     matches: List[Dict[str, object]] = []
     for match, pcount in rows:
         seq = seq_by_match_id.get(int(match.id), int(match.id))
@@ -241,7 +208,6 @@ def list_bluewar_matches(
                 "pcount": int(pcount),
             }
         )
-
     return templates.TemplateResponse(
         "bluewar/matches.html",
         {
@@ -252,14 +218,11 @@ def list_bluewar_matches(
             "page": page,
             "page_size": page_size,
             "total_pages": total_pages,
-            "mode": mode,
             "status": status,
             "source_app": source_app,
             "q": q,
         },
     )
-
-
 @router.get("/matches/{match_id}", response_class=HTMLResponse)
 def bluewar_match_detail(
     match_id: int,
@@ -274,14 +237,12 @@ def bluewar_match_detail(
             {"request": request, "match": None, "error": "매치를 찾을 수 없어."},
             status_code=404,
         )
-
     participants = (
         db.query(models.BlueWarParticipant)
         .filter(models.BlueWarParticipant.match_id == match_id)
         .order_by(models.BlueWarParticipant.side.asc())
         .all()
     )
-
     # 표시용: 모드별 시퀀스 번호 및 ID 표기
     seq_subq = (
         db.query(
@@ -302,7 +263,6 @@ def bluewar_match_detail(
     )
     seq_i = int(seq) if seq is not None else int(match.id)
     display_id = f"#{_display_id_number(match.mode, seq_i)}"
-
     # 연습 모드라면 AI/난이도 표시를 위해 참가자에서 ai_name 추정
     ai_label: Optional[str] = None
     if (match.mode or "").strip().lower() == "practice":
@@ -314,7 +274,6 @@ def bluewar_match_detail(
                 ai_label = p.name
                 break
     mode_label = _mode_label(match.mode, ai_label=ai_label)
-
     # discord_id -> 표시 이름 매핑 (users 테이블 우선)
     discord_ids: Set[str] = set()
     for p in participants:
@@ -324,7 +283,6 @@ def bluewar_match_detail(
     if discord_ids:
         for u in db.query(models.User).filter(models.User.discord_id.in_(list(discord_ids))).all():
             users_by_discord[u.discord_id] = u
-
     def resolve_name(p: models.BlueWarParticipant) -> str:
         if p.user_id and p.user and p.user.nickname:
             return p.user.nickname
@@ -337,7 +295,6 @@ def bluewar_match_detail(
         if p.discord_id:
             return p.discord_id
         return "-"
-
     view_parts = []
     for p in participants:
         view_parts.append(
@@ -349,9 +306,7 @@ def bluewar_match_detail(
                 "turns": p.turns,
             }
         )
-
     is_admin = request.session.get("user") is not None
-
     return templates.TemplateResponse(
         "bluewar/match_detail.html",
         {
