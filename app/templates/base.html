@@ -292,8 +292,7 @@
 
             {% if is_admin %}
                 <div class="nav-section-title">관리</div>
-                <a href="/records/" class="nav-link">블루전 전적</a>
-                <a href="/users/" class="nav-link">유저 관리</a>
+<a href="/users/" class="nav-link">유저 관리</a>
                 <a href="/admin/members/" class="nav-link">회원/권한</a>
                 <a href="/admin/wordlists/" class="nav-link">단어 DB</a>
             {% endif %}
@@ -323,9 +322,9 @@
                              member_user.id if member_user.id is defined and member_user.id else
                              "회원")
                         %}
-                        <span style="font-size:0.85rem; color:#9ca3af; margin-right:0.5rem;">
+                        <a href="/member/profile" style="font-size:0.85rem; color:#9ca3af; margin-right:0.5rem; text-decoration:none;">
                             {{ display_name }} 님
-                        </span>
+                        </a>
                         <a href="/member/logout">로그아웃</a>
                     {% endif %}
                 </div>

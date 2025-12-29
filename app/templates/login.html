@@ -74,22 +74,44 @@
                 >
             </div>
 
-            <button
-                type="submit"
-                style="
-                    width:100%;
+            <div style="display:flex; gap:0.6rem; margin-top:0.25rem; flex-wrap:wrap;">
+                <button
+                    type="submit"
+                    style="
+                        flex:1;
+                        min-width:140px;
+                        padding:0.6rem 0.75rem;
+                        border:none;
+                        border-radius:9999px;
+                        background:linear-gradient(90deg,#6366f1,#ec4899);
+                        color:white;
+                        font-weight:600;
+                        font-size:0.95rem;
+                        cursor:pointer;
+                    "
+                >
+                    로그인
+                </button>
+
+                <a href="/member/register" style="
+                    flex:1;
+                    min-width:140px;
+                    display:inline-block;
+                    text-align:center;
                     padding:0.6rem 0.75rem;
-                    border:none;
                     border-radius:9999px;
-                    background:linear-gradient(90deg,#6366f1,#ec4899);
-                    color:white;
+                    border:1px solid #374151;
+                    background:#0b1220;
+                    color:#e5e7eb;
+                    text-decoration:none;
                     font-weight:600;
                     font-size:0.95rem;
-                    cursor:pointer;
-                "
-            >
-                로그인
-            </button>
+                ">회원가입</a>
+            </div>
+
+            <div style="text-align:center; margin-top:0.8rem;">
+                <a href="/member/login" style="color:#9ca3af; text-decoration:none; font-size:0.9rem;">회원 로그인</a>
+            </div>
         </form>
     </div>
 </div>

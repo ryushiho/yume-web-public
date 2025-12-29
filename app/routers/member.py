@@ -185,6 +185,144 @@ def login(
     return RedirectResponse(url="/member/dashboard", status_code=303)
 
 
+
+
+@router.get("/profile")
+def profile_form(
+    request: Request,
+    db: Session = Depends(get_db),
+    member=Depends(get_current_member_user),
+):
+    m: Optional[models.MemberUser] = (
+        db.query(models.MemberUser)
+        .filter(models.MemberUser.id == member.get("member_id"))
+        .first()
+    )
+    if not m:
+        # 세션이 꼬였을 때 안전하게 로그아웃 처리
+        request.session.pop("member", None)
+        return RedirectResponse(url="/member/login", status_code=303)
+
+    return templates.TemplateResponse(
+        "member_profile.html",
+        {
+            "request": request,
+            "member": {"discord_id": m.discord_id, "nickname": m.nickname},
+            "message": None,
+            "error": None,
+        },
+    )
+
+
+@router.post("/profile")
+def profile_update(
+    request: Request,
+    db: Session = Depends(get_db),
+    member=Depends(get_current_member_user),
+    nickname: str = Form(...),
+    current_password: str = Form(""),
+    new_password: str = Form(""),
+    new_password_confirm: str = Form(""),
+):
+    m: Optional[models.MemberUser] = (
+        db.query(models.MemberUser)
+        .filter(models.MemberUser.id == member.get("member_id"))
+        .first()
+    )
+    if not m:
+        request.session.pop("member", None)
+        return RedirectResponse(url="/member/login", status_code=303)
+
+    nickname = _normalize_nickname(nickname)
+    if not nickname or len(nickname) > 30:
+        return templates.TemplateResponse(
+            "member_profile.html",
+            {
+                "request": request,
+                "member": {"discord_id": m.discord_id, "nickname": m.nickname},
+                "message": None,
+                "error": "닉네임은 1~30자까지 가능해.",
+            },
+            status_code=400,
+        )
+
+    # 비밀번호 변경이 요청된 경우
+    want_pw_change = bool(current_password or new_password or new_password_confirm)
+    if want_pw_change:
+        if not current_password:
+            return templates.TemplateResponse(
+                "member_profile.html",
+                {
+                    "request": request,
+                    "member": {"discord_id": m.discord_id, "nickname": nickname},
+                    "message": None,
+                    "error": "비밀번호를 바꾸려면 현재 비밀번호를 입력해줘.",
+                },
+                status_code=400,
+            )
+
+        if not verify_password(current_password, m.password_hash):
+            return templates.TemplateResponse(
+                "member_profile.html",
+                {
+                    "request": request,
+                    "member": {"discord_id": m.discord_id, "nickname": nickname},
+                    "message": None,
+                    "error": "현재 비밀번호가 올바르지 않아.",
+                },
+                status_code=400,
+            )
+
+        if (not new_password) or len(new_password) < 8:
+            return templates.TemplateResponse(
+                "member_profile.html",
+                {
+                    "request": request,
+                    "member": {"discord_id": m.discord_id, "nickname": nickname},
+                    "message": None,
+                    "error": "새 비밀번호는 8자 이상으로 설정해줘.",
+                },
+                status_code=400,
+            )
+
+        if new_password != new_password_confirm:
+            return templates.TemplateResponse(
+                "member_profile.html",
+                {
+                    "request": request,
+                    "member": {"discord_id": m.discord_id, "nickname": nickname},
+                    "message": None,
+                    "error": "새 비밀번호 확인이 일치하지 않아.",
+                },
+                status_code=400,
+            )
+
+        m.password_hash = hash_password(new_password)
+
+    # 닉네임 변경
+    m.nickname = nickname
+    db.commit()
+
+    # 세션 반영
+    request.session["member"] = {
+        "member_id": m.id,
+        "id": m.discord_id,
+        "nickname": m.nickname,
+        "is_admin": bool(getattr(m, "is_admin", False)),
+    }
+
+    return templates.TemplateResponse(
+        "member_profile.html",
+        {
+            "request": request,
+            "member": {"discord_id": m.discord_id, "nickname": m.nickname},
+            "message": "저장 완료!",
+            "error": None,
+        },
+    )
+
+
+
 @router.get("/logout")
 def logout(request: Request):
     request.session.pop("member", None)

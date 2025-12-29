@@ -45,7 +45,7 @@
             <td>{{ m.total_rounds is not none and m.total_rounds or "-" }}</td>
             <td>{{ m.started_at or "-" }}</td>
             <td>
-                <a href="/records/{{ m.id }}" class="btn btn-primary btn-sm">전적 보기</a>
+                <a href="/bluewar/matches/{{ m.id }}" class="btn btn-primary btn-sm">전적 보기</a>
             </td>
         </tr>
         {% else %}
