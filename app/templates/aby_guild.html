@@ -33,7 +33,10 @@
     </div>
 </div>
 
-<h2 style="margin-top:1.5rem;">주간 요약</h2>
+<div class="d-flex align-items-end justify-content-between" style="margin-top:1.5rem;">
+  <h2 class="mb-0">주간 요약</h2>
+  <a class="btn btn-sm btn-outline-secondary" href="/aby/guild/{{ guild.guild_id }}/weekly">전체 보기</a>
+</div>
 {% if not weekly %}
 <div style="margin-top:0.75rem; padding:1rem; background:#0b1220; border-radius:0.75rem; color:#9ca3af;">
     주간 데이터가 아직 없습니다.
@@ -116,7 +119,10 @@
 
 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-top:1.8rem;">
     <div>
-        <h2>최근 탐사</h2>
+        <div class="d-flex align-items-end justify-content-between">
+          <h2 class="mb-0">최근 탐사</h2>
+          <a class="btn btn-sm btn-outline-secondary" href="/aby/guild/{{ guild.guild_id }}/explores">전체 보기</a>
+        </div>
         {% if not explores %}
         <div style="margin-top:0.75rem; padding:1rem; background:#0b1220; border-radius:0.75rem; color:#9ca3af;">
             탐사 로그가 아직 없습니다.
@@ -133,7 +139,11 @@
             <tbody>
                 {% for e in explores %}
                 <tr>
-                    <td style="white-space:nowrap;">{{ e.created_at.strftime("%m-%d %H:%M") if e.created_at else "-" }}</td>
+                    <td style="white-space:nowrap;">
+                        <a href="/aby/explore/{{ e.id }}" style="text-decoration:none;">
+                            {{ e.created_at.strftime("%m-%d %H:%M") if e.created_at else "-" }}
+                        </a>
+                    </td>
                     <td style="white-space:nowrap;">{{ e.nickname or e.user_id or "-" }}</td>
                     <td>
                         {% if e.summary %}
@@ -153,7 +163,10 @@
     </div>
 
     <div>
-        <h2>최근 사건</h2>
+        <div class="d-flex align-items-end justify-content-between">
+          <h2 class="mb-0">최근 사건</h2>
+          <a class="btn btn-sm btn-outline-secondary" href="/aby/guild/{{ guild.guild_id }}/incidents">전체 보기</a>
+        </div>
         {% if not incidents %}
         <div style="margin-top:0.75rem; padding:1rem; background:#0b1220; border-radius:0.75rem; color:#9ca3af;">
             사건 로그가 아직 없습니다.
@@ -171,7 +184,11 @@
             <tbody>
                 {% for i in incidents %}
                 <tr>
-                    <td style="white-space:nowrap;">{{ i.created_at.strftime("%m-%d %H:%M") if i.created_at else "-" }}</td>
+                    <td style="white-space:nowrap;">
+                        <a href="/aby/incident/{{ i.id }}" style="text-decoration:none;">
+                            {{ i.created_at.strftime("%m-%d %H:%M") if i.created_at else "-" }}
+                        </a>
+                    </td>
                     <td style="white-space:nowrap;">{{ i.kind }}</td>
                     <td>{{ i.title }}</td>
                     <td style="white-space:nowrap;"><strong>{{ "{:+,}".format(i.delta_debt or 0) }}</strong></td>

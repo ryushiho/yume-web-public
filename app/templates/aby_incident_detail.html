@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0">아비도스 · 사건 로그 상세</h1>
+      <div class="text-muted small">ID: {{ row.id }} · 서버: {{ row.guild_id }}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="/aby/guild/{{ row.guild_id }}">현황</a>
+      <a class="btn btn-outline-secondary" href="/aby/guild/{{ row.guild_id }}/incidents">목록</a>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <div class="text-muted small">시간</div>
+          <div>{{ row.created_at.strftime("%Y-%m-%d %H:%M:%S") if row.created_at else "-" }}</div>
+        </div>
+        <div class="col-md-3">
+          <div class="text-muted small">유형</div>
+          <div>{{ row.incident_type or "-" }}</div>
+        </div>
+        <div class="col-md-3">
+          <div class="text-muted small">심각도</div>
+          <div>{{ row.severity or 0 }}</div>
+        </div>
+        <div class="col-md-3">
+          <div class="text-muted small">요약</div>
+          <div>{{ row.summary or "-" }}</div>
+        </div>
+      </div>
+
+      {% if row.note %}
+        <hr>
+        <div class="text-muted small">메모</div>
+        <div>{{ row.note }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">효과 (JSON)</div>
+    <div class="card-body">
+      <pre class="mb-0" style="white-space: pre-wrap;">{{ effect_pretty }}</pre>
+    </div>
+  </div>
+{% endblock %}

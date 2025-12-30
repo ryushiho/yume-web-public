@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0">아비도스 · 주간 리포트 상세</h1>
+      <div class="text-muted small">ID: {{ row.id }} · 서버: {{ row.guild_id }} · 주차: {{ row.week_key or "-" }}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="/aby/guild/{{ row.guild_id }}">서버로</a>
+      <a class="btn btn-outline-secondary" href="/aby/guild/{{ row.guild_id }}/weekly">목록</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-4">
+      <div class="card">
+        <div class="card-body">
+          <div class="mb-2"><span class="badge text-bg-primary">{{ row.title or "리포트" }}</span></div>
+          <div class="small text-muted">생성</div>
+          <div class="mb-2">{{ row.created_at.strftime("%Y-%m-%d %H:%M") if row.created_at else "-" }}</div>
+
+          <div class="small text-muted">총 이자</div>
+          <div class="mb-2">{{ row.total_interest_charged }}</div>
+
+          <div class="small text-muted">총 상환</div>
+          <div class="mb-2">{{ row.total_repaid }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card">
+        <div class="card-header">리포트 JSON</div>
+        <div class="card-body">
+          <pre class="mb-0" style="white-space: pre-wrap;">{{ pretty_report }}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mt-0">
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">포인트 랭킹 JSON</div>
+        <div class="card-body">
+          <pre class="mb-0" style="white-space: pre-wrap;">{{ pretty_points }}</pre>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card">
+        <div class="card-header">기타 JSON</div>
+        <div class="card-body">
+          <pre class="mb-0" style="white-space: pre-wrap;">{{ pretty_misc }}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

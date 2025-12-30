@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-0">아비도스 · 탐사 로그 상세</h1>
+      <div class="text-muted small">ID: {{ row.id }} · 서버: {{ row.guild_id }}</div>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="/aby/guild/{{ row.guild_id }}/explores">목록</a>
+      <a class="btn btn-outline-primary" href="/aby/guild/{{ row.guild_id }}">현황</a>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <div class="card-header fw-bold">기본 정보</div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-4 text-muted">시간</dt><dd class="col-8">{{ row.created_at.strftime("%Y-%m-%d %H:%M:%S") if row.created_at else "-" }}</dd>
+            <dt class="col-4 text-muted">유저</dt><dd class="col-8">{{ row.user_name or row.user_id }}</dd>
+            <dt class="col-4 text-muted">타입</dt><dd class="col-8">{{ row.explore_type or "-" }}</dd>
+            <dt class="col-4 text-muted">소요</dt><dd class="col-8">{{ row.duration_sec or 0 }}s</dd>
+            <dt class="col-4 text-muted">결과</dt><dd class="col-8">{{ row.result or "-" }}</dd>
+            <dt class="col-4 text-muted">크레딧 Δ</dt><dd class="col-8">{{ "%+d"|format(row.delta_credits or 0) }}</dd>
+            <dt class="col-4 text-muted">물 Δ</dt><dd class="col-8">{{ "%+d"|format(row.delta_water or 0) }}</dd>
+            <dt class="col-4 text-muted">리스크</dt><dd class="col-8">{{ ("%.1f"|format(row.risk_level)) if row.risk_level is not none else "-" }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <div class="card-header fw-bold">단어 사용</div>
+        <div class="card-body">
+          <pre class="mb-0" style="white-space: pre-wrap;">{{ pretty_words }}</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card mb-3">
+        <div class="card-header fw-bold">세부 정보 (details_json)</div>
+        <div class="card-body">
+          <pre class="mb-0" style="white-space: pre-wrap;">{{ pretty_details }}</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <div class="card-header fw-bold">조우 (encounters_json)</div>
+        <div class="card-body">
+          <pre class="mb-0" style="white-space: pre-wrap;">{{ pretty_encounters }}</pre>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <div class="card-header fw-bold">롤 (rolls_json)</div>
+        <div class="card-body">
+          <pre class="mb-0" style="white-space: pre-wrap;">{{ pretty_rolls }}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+{% endblock %}
