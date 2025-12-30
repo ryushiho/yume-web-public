@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-header">
+  <h1>아비도스 랭킹</h1>
+  <p class="muted">주간 포인트 랭킹(봇의 주간 리포트 기준)을 조회합니다.</p>
+</div>
+
+<div class="card" style="margin-bottom: 16px;">
+  <div class="card-body">
+    <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+      <div>
+        <div class="muted" style="font-size:12px; margin-bottom:4px;">길드</div>
+        <select id="aby-guild" class="input" style="min-width: 260px;">
+          {% for g in guilds %}
+            <option value="{{ g.guild_id }}" {% if selected_guild_id == (g.guild_id|string) %}selected{% endif %}>{{ g.guild_id }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <div class="muted" style="font-size:12px; margin-bottom:4px;">주차(week_key)</div>
+        <select id="aby-week" class="input" style="min-width: 220px;" {% if not week_keys %}disabled{% endif %}>
+          {% for wk in week_keys %}
+            <option value="{{ wk }}" {% if selected_week_key == wk %}selected{% endif %}>{{ wk }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="flex:1;"></div>
+
+      <div class="muted" style="font-size:12px;">
+        {% if updated_at %}
+          업데이트: {{ updated_at.strftime('%Y-%m-%d %H:%M:%S') }}
+        {% else %}
+          업데이트: -
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if not guilds %}
+  <div class="card"><div class="card-body">데이터가 없습니다.</div></div>
+{% elif not week_keys %}
+  <div class="card"><div class="card-body">아직 주간 리포트(랭킹) 데이터가 없어요.</div></div>
+{% elif not rows %}
+  <div class="card"><div class="card-body">선택한 주차에 랭킹 데이터가 없습니다.</div></div>
+{% else %}
+  <div class="card">
+    <div class="card-body">
+      <table class="table">
+        <thead>
+          <tr>
+            <th style="width: 70px;">순위</th>
+            <th>닉네임</th>
+            <th style="width: 140px; text-align:right;">포인트</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+            <tr>
+              <td>{{ r.rank }}</td>
+              <td>{{ r.nickname }}</td>
+              <td style="text-align:right;">{{ r.points }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endif %}
+
+<script>
+  (function () {
+    const guildSel = document.getElementById('aby-guild');
+    const weekSel = document.getElementById('aby-week');
+    function go() {
+      const gid = guildSel ? guildSel.value : '';
+      const wk = weekSel && !weekSel.disabled ? weekSel.value : '';
+      const params = new URLSearchParams();
+      if (gid) params.set('guild_id', gid);
+      if (wk) params.set('week_key', wk);
+      const qs = params.toString();
+      window.location.href = '/aby/ranking' + (qs ? ('?' + qs) : '');
+    }
+    if (guildSel) guildSel.addEventListener('change', go);
+    if (weekSel) weekSel.addEventListener('change', go);
+  })();
+</script>
+
+{% endblock %}

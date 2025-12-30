@@ -43,6 +43,58 @@ def _pretty_json(s: Optional[str]) -> str:
         return s or ""
 
 
+def _normalize_points_ranking(obj: Any) -> List[Dict[str, Any]]:
+    """Normalize various payload shapes into a sorted list for templates.
+
+    Expected output: [{"rank":1,"nickname":"...","points":123,"user_id":"..."}, ...]
+    """
+    if obj is None:
+        return []
+
+    items: Any = None
+    if isinstance(obj, list):
+        items = obj
+    elif isinstance(obj, dict):
+        for k in ("ranking", "items", "users", "data", "list", "rows"):
+            v = obj.get(k)
+            if isinstance(v, list):
+                items = v
+                break
+        if items is None and all(isinstance(v, dict) for v in obj.values()):
+            # Rare: dict keyed by user_id
+            items = list(obj.values())
+    else:
+        return []
+
+    out: List[Dict[str, Any]] = []
+    for it in items or []:
+        if not isinstance(it, dict):
+            continue
+        nickname = (
+            it.get("nickname")
+            or it.get("name")
+            or it.get("display_name")
+            or it.get("username")
+            or it.get("user")
+            or "-"
+        )
+        points = it.get("points")
+        if points is None:
+            points = it.get("score") or it.get("pt") or it.get("value") or 0
+        user_id = it.get("user_id") or it.get("discord_id") or it.get("id")
+        out.append({"rank": 0, "nickname": nickname, "points": points, "user_id": user_id})
+
+    # Sort by points desc (best effort)
+    try:
+        out.sort(key=lambda r: (-(float(r.get("points") or 0.0)), str(r.get("nickname") or "")))
+    except Exception:
+        pass
+
+    for i, r in enumerate(out, start=1):
+        r["rank"] = i
+    return out
+
+
 def _paginate(page: int, page_size: int, *, max_size: int = 200) -> Tuple[int, int]:
     p = 1 if page is None else max(int(page), 1)
     s = 50 if page_size is None else max(int(page_size), 1)
@@ -337,5 +389,82 @@ def aby_weekly_detail(
             "explore_summary_json": _pretty_json(row.explore_summary_json),
             "incident_summary_json": _pretty_json(row.incident_summary_json),
             "report_json": _pretty_json(row.report_json),
+        },
+    )
+
+
+@router.get("/ranking", response_class=HTMLResponse)
+def aby_ranking(
+    request: Request,
+    guild_id: Optional[str] = Query(default=None),
+    week_key: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_member_or_admin),
+):
+    """아비도스 주간 포인트 랭킹.
+
+    - guild_id/ week_key 를 선택하지 않으면: 가장 최근 데이터 기준으로 보여줌
+    - 데이터는 AbyWeeklySummary.points_ranking_json 을 사용
+    """
+    guilds = db.query(models.AbyGuildState).order_by(models.AbyGuildState.guild_id.asc()).all()
+    if not guilds:
+        return templates.TemplateResponse(
+            "aby_ranking.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "guilds": [],
+                "selected_guild_id": None,
+                "week_keys": [],
+                "selected_week_key": None,
+                "rows": [],
+                "updated_at": None,
+            },
+        )
+
+    selected_guild_id = str(guild_id) if guild_id else str(guilds[0].guild_id)
+
+    week_rows = (
+        db.query(models.AbyWeeklySummary.week_key)
+        .filter(models.AbyWeeklySummary.guild_id == selected_guild_id)
+        .order_by(models.AbyWeeklySummary.week_key.desc())
+        .all()
+    )
+    week_keys = [w[0] for w in week_rows]
+    selected_week_key = week_key or (week_keys[0] if week_keys else None)
+
+    summary: Optional[models.AbyWeeklySummary] = None
+    rows: List[Dict[str, Any]] = []
+    updated_at = None
+
+    if selected_week_key:
+        summary = (
+            db.query(models.AbyWeeklySummary)
+            .filter(
+                models.AbyWeeklySummary.guild_id == selected_guild_id,
+                models.AbyWeeklySummary.week_key == selected_week_key,
+            )
+            .first()
+        )
+
+    if summary and summary.points_ranking_json:
+        try:
+            obj = json.loads(summary.points_ranking_json)
+        except Exception:
+            obj = None
+        rows = _normalize_points_ranking(obj)
+        updated_at = summary.updated_at
+
+    return templates.TemplateResponse(
+        "aby_ranking.html",
+        {
+            "request": request,
+            "current_user": current_user,
+            "guilds": guilds,
+            "selected_guild_id": selected_guild_id,
+            "week_keys": week_keys,
+            "selected_week_key": selected_week_key,
+            "rows": rows,
+            "updated_at": updated_at,
         },
     )
