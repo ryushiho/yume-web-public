@@ -8,6 +8,7 @@ from starlette.responses import RedirectResponse
 from config import settings
 from app.routers import auth, dashboard, users, api_bluewar, ranking, bluewar, home, member, admin_members, aby, api_aby
 from app.routers import admin_wordlists
+from app.routers import admin_integration
 from app.routers import api_wordlists
 from app.routers import words
 from app.database import Base, engine
@@ -98,6 +99,7 @@ app.include_router(ranking.router)
 app.include_router(words.router)
 app.include_router(admin_members.router)
 app.include_router(admin_wordlists.router)
+app.include_router(admin_integration.router)
 
 
 

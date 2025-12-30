@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+.muted{color:#9ca3af;font-size:0.9rem;}
+.kv{display:flex;gap:12px;align-items:center;margin:8px 0;}
+.kv .k{width:160px;color:#9ca3af;font-size:0.85rem;}
+.kv .v{flex:1;}
+</style>
+<h1>봇 연동</h1>
+
+<p class="muted">이 페이지는 관리자에게만 보입니다. (토큰/엔드포인트 안내)</p>
+
+<div class="card" style="margin:16px 0;">
+  <h2>Wordlists (시호/유메 봇 다운로드)</h2>
+  <div class="kv">
+    <div class="k">BASE URL</div>
+    <div class="v"><code>{{ base_url }}</code></div>
+  </div>
+  <div class="kv">
+    <div class="k">WORDLIST TOKEN</div>
+    <div class="v">
+      <input id="wordlistToken" type="password" value="{{ wordlist_token }}" readonly style="width: 520px;" />
+      <button class="btn" onclick="copyValue('wordlistToken')">복사</button>
+      <button class="btn" onclick="togglePw('wordlistToken')">보기/숨기기</button>
+    </div>
+  </div>
+
+  <h3 style="margin-top:16px;">엔드포인트</h3>
+  <ul>
+    <li><code>{{ base_url }}/api/bluewar/wordlists/meta</code> (공개)</li>
+    <li>
+      <a href="{{ base_url }}/api/bluewar/wordlists/suggestion.txt?token={{ wordlist_token }}" target="_blank">suggestion.txt 다운로드</a>
+      <small class="muted">(token 쿼리 사용)</small>
+    </li>
+    <li>
+      <a href="{{ base_url }}/api/bluewar/wordlists/blue_archive_words.txt?token={{ wordlist_token }}" target="_blank">blue_archive_words.txt 다운로드</a>
+      <small class="muted">(token 쿼리 사용)</small>
+    </li>
+  </ul>
+
+  <details style="margin-top:14px;">
+    <summary>cURL 예시 (봇/서버에서 테스트)</summary>
+    <pre><code>curl -s -H "X-Yume-Wordlist-Token: {{ wordlist_token }}" \
+  "{{ base_url }}/api/bluewar/wordlists/suggestion.txt" | head
+
+curl -s "{{ base_url }}/api/bluewar/wordlists/meta" | jq
+</code></pre>
+  </details>
+</div>
+
+
+<div class="card" style="margin:16px 0;">
+  <h2>BlueWar 매치 전송 (웹에 전적/복기 로그 저장)</h2>
+  <div class="kv">
+    <div class="k">API TOKEN</div>
+    <div class="v">
+      <input id="apiToken" type="password" value="{{ api_token }}" readonly style="width: 520px;" />
+      <button class="btn" onclick="copyValue('apiToken')">복사</button>
+      <button class="btn" onclick="togglePw('apiToken')">보기/숨기기</button>
+    </div>
+  </div>
+
+  <h3 style="margin-top:16px;">엔드포인트</h3>
+  <ul>
+    <li><code>{{ base_url }}/api/bluewar/matches</code> (헤더 <code>X-API-Token</code>)</li>
+  </ul>
+
+  <details style="margin-top:14px;">
+    <summary>cURL 예시</summary>
+    <pre><code>curl -s -X POST "{{ base_url }}/api/bluewar/matches" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: {{ api_token }}" \
+  -d '{"mode":"pvp","status":"test","starter":"a","winner":"a","loser":"b","win_gap":1,"total_rounds":1,"started_at":0,"finished_at":0,"participants":[]}'
+</code></pre>
+  </details>
+</div>
+
+
+<script>
+function copyValue(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.select();
+  el.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(el.value);
+}
+
+function togglePw(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.type = (el.type === 'password') ? 'text' : 'password';
+}
+</script>
+
+{% endblock %}
