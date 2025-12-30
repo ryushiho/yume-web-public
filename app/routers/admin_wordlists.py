@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 from urllib.parse import urlencode, quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.exc import IntegrityError
@@ -30,6 +30,8 @@ from app.routers.api_wordlists import (
 
 from app.utils.time import fmt_kst
 from app.utils.wordlists import WORDLIST_LABELS
+from app.utils import dictpacks
+from app.config import settings
 
 
 router = APIRouter(prefix="/admin/wordlists", tags=["admin-wordlists"])
@@ -100,6 +102,16 @@ def admin_wordlists_page(
     which = request.query_params.get("which")
 
     metas = {name: _meta_for(db, name) for name in ALLOWED_LISTS.keys()}
+
+    # 월별(버전) 단어 DB 팩 상태
+    packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
+    packs_default = (settings.WORDLIST_PACKS_DEFAULT or "").strip()
+    packs_max_keep = int(getattr(settings, "WORDLIST_PACKS_MAX_KEEP", 3) or 3)
+
+    pack_versions = dictpacks.list_versions(packs_dir)
+    pack_default = dictpacks.get_default_version(env_override=packs_dir, env_default=packs_default)
+    pack_manifest = dictpacks.build_manifest(env_override=packs_dir, env_default=packs_default, max_keep=packs_max_keep)
+
     return templates.TemplateResponse(
         "admin_wordlists.html",
         {
@@ -109,8 +121,134 @@ def admin_wordlists_page(
             "ok": ok,
             "error": error,
             "which": which,
+
+            # packs
+            "packs_manifest": pack_manifest,
+            "packs_versions": pack_versions,
+            "packs_default": pack_default,
+            "packs_max_keep": packs_max_keep,
         },
     )
+
+
+def _decode_upload_txt(raw: bytes) -> str:
+    if raw is None or len(raw) == 0:
+        raise ValueError("empty")
+    if len(raw) > 10 * 1024 * 1024:
+        # 안전 상한(10MB)
+        raise ValueError("toolarge")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            return raw.decode("cp949")
+        except Exception:
+            raise ValueError("encoding")
+
+
+@router.post("/packs/upload")
+async def admin_packs_upload(
+    request: Request,
+    dict_version: str = Form(...),
+    blue_archive_words: UploadFile = File(...),
+    suggestion: UploadFile = File(...),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    """관리자 전용: 월별(버전) 단어 DB 팩 업로드.
+
+    - dict_version: YYYY-MM
+    - blue_archive_words: blue_archive_words.txt
+    - suggestion: suggestion.txt
+    """
+    v = (dict_version or "").strip()
+    if not dictpacks.is_valid_version(v):
+        return RedirectResponse(url="/admin/wordlists/?error=invalid_pack&which=" + quote(v), status_code=303)
+
+    packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
+    packs_default = (settings.WORDLIST_PACKS_DEFAULT or "").strip()
+    packs_max_keep = int(getattr(settings, "WORDLIST_PACKS_MAX_KEEP", 3) or 3)
+
+    try:
+        raw1 = await blue_archive_words.read()
+        raw2 = await suggestion.read()
+        text1 = _decode_upload_txt(raw1)
+        text2 = _decode_upload_txt(raw2)
+
+        # 정규화(중복 제거 + 마지막 개행 보장)
+        words1 = _parse_txt(text1)
+        words2 = _parse_txt(text2)
+        norm1 = _build_txt(words1)
+        norm2 = _build_txt(words2)
+
+        dictpacks.write_pack_files(
+            v,
+            blue_archive_words_txt=norm1,
+            suggestion_txt=norm2,
+            env_override=packs_dir,
+        )
+
+        dictpacks.prune_versions(env_override=packs_dir, max_keep=packs_max_keep)
+
+        # default_version.txt가 없고 env로 강제하지 않는다면, 기본값을 최신으로 고정
+        if not packs_default:
+            df = dictpacks.default_file(packs_dir)
+            if not df.exists():
+                latest = dictpacks.get_default_version(env_override=packs_dir, env_default="")
+                if latest:
+                    dictpacks.set_default_version(latest, env_override=packs_dir)
+    except ValueError as e:
+        code = str(e)
+        return RedirectResponse(url=f"/admin/wordlists/?error={code}&which=pack", status_code=303)
+    except Exception:
+        return RedirectResponse(url="/admin/wordlists/?error=pack_upload&which=pack", status_code=303)
+
+    return RedirectResponse(url=f"/admin/wordlists/?ok=1&which=pack:{quote(v)}", status_code=303)
+
+
+@router.post("/packs/delete/{dict_version}")
+async def admin_packs_delete(
+    dict_version: str,
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    v = (dict_version or "").strip()
+    if not dictpacks.is_valid_version(v):
+        return RedirectResponse(url="/admin/wordlists/?error=invalid_pack&which=" + quote(v), status_code=303)
+
+    packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
+    packs_default = (settings.WORDLIST_PACKS_DEFAULT or "").strip()
+
+    try:
+        dictpacks.delete_version(v, env_override=packs_dir)
+
+        # default_version.txt가 없고 env로 강제하지 않는다면, 최신으로 재고정
+        if not packs_default:
+            df = dictpacks.default_file(packs_dir)
+            if not df.exists():
+                latest = dictpacks.get_default_version(env_override=packs_dir, env_default="")
+                if latest:
+                    dictpacks.set_default_version(latest, env_override=packs_dir)
+    except Exception:
+        return RedirectResponse(url="/admin/wordlists/?error=pack_delete&which=" + quote(v), status_code=303)
+
+    return RedirectResponse(url=f"/admin/wordlists/?ok=1&which=pack_deleted:{quote(v)}", status_code=303)
+
+
+@router.post("/packs/set_default/{dict_version}")
+async def admin_packs_set_default(
+    dict_version: str,
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    v = (dict_version or "").strip()
+    if not dictpacks.is_valid_version(v):
+        return RedirectResponse(url="/admin/wordlists/?error=invalid_pack&which=" + quote(v), status_code=303)
+
+    packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
+    try:
+        dictpacks.set_default_version(v, env_override=packs_dir)
+    except Exception:
+        return RedirectResponse(url="/admin/wordlists/?error=pack_default&which=" + quote(v), status_code=303)
+
+    return RedirectResponse(url=f"/admin/wordlists/?ok=1&which=pack_default:{quote(v)}", status_code=303)
 
 
 @router.get("/{list_name}")

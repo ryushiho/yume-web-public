@@ -22,6 +22,23 @@ class Settings:
         #   예) YUME_WORDLIST_TOKEN="<랜덤 긴 문자열>"
         self.WORDLIST_TOKEN: str = os.getenv("YUME_WORDLIST_TOKEN", "")
 
+        # 월별(버전) 단어 DB 팩 저장 경로 (선택)
+        # - 미지정 시: <project_root>/data/wordlists/bluewar
+        # - 지정 시: 절대/상대 경로 모두 허용(상대는 project_root 기준)
+        self.WORDLIST_PACKS_DIR: str = os.getenv("YUME_WORDLIST_PACKS_DIR", "").strip()
+
+        # 월별 단어 DB: 항상 최대 N개만 유지 (기본 3)
+        try:
+            self.WORDLIST_PACKS_MAX_KEEP: int = int(os.getenv("YUME_WORDLIST_PACKS_MAX_KEEP", "3"))
+        except Exception:
+            self.WORDLIST_PACKS_MAX_KEEP = 3
+        if self.WORDLIST_PACKS_MAX_KEEP < 1:
+            self.WORDLIST_PACKS_MAX_KEEP = 3
+
+        # 기본(legacy) 경로로 내려줄 디폴트 버전 (선택)
+        # - 지정하지 않으면: default_version.txt -> 최신 버전 순
+        self.WORDLIST_PACKS_DEFAULT: str = os.getenv("YUME_WORDLIST_PACKS_DEFAULT", "").strip()
+
 
 # FastAPI 전체에서 쓰는 전역 설정 인스턴스
 settings = Settings()

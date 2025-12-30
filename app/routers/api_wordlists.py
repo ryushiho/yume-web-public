@@ -15,9 +15,18 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_current_admin_user_api
 from app import models
 from app.config import settings
+from app.utils import dictpacks
 
 
 MAX_PAGE_SIZE = 1000
+
+
+def _read_text_robust(path) -> str:
+    """UTF-8 우선, 실패하면 CP949로 읽는다."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return path.read_text(encoding="cp949")
 
 
 def _require_wordlist_token(
@@ -71,6 +80,58 @@ ALLOWED_LISTS = {
     "blue_archive_words": "blue_archive_words.txt",
     "public_words": "public_words.txt",
 }
+
+
+# 월별(버전) 단어 DB 팩이 활성화되어 있으면,
+# suggestion / blue_archive_words 의 .txt 응답은 "default_version" 파일을 우선 제공한다.
+PACK_BACKED_LISTS = {"suggestion", "blue_archive_words"}
+
+
+def _packs_env() -> tuple[str, str, int]:
+    """(packs_dir, packs_default, max_keep)"""
+    return (
+        (settings.WORDLIST_PACKS_DIR or "").strip(),
+        (settings.WORDLIST_PACKS_DEFAULT or "").strip(),
+        int(getattr(settings, "WORDLIST_PACKS_MAX_KEEP", 3) or 3),
+    )
+
+
+def _packs_default_version() -> str | None:
+    packs_dir, packs_default, _max_keep = _packs_env()
+    return dictpacks.get_default_version(env_override=packs_dir, env_default=packs_default)
+
+
+def _packs_has_file(list_name: str) -> bool:
+    if list_name not in PACK_BACKED_LISTS:
+        return False
+    packs_dir, packs_default, _max_keep = _packs_env()
+    dv = dictpacks.get_default_version(env_override=packs_dir, env_default=packs_default)
+    if not dv:
+        return False
+    fn = ALLOWED_LISTS[list_name]
+    try:
+        p = dictpacks.pack_file_path(dv, fn, env_override=packs_dir)
+        return p.exists() and p.is_file()
+    except Exception:
+        return False
+
+
+def _packs_read_default_txt(list_name: str) -> tuple[str, str] | None:
+    """Return (dict_version, content_txt) for the default pack file if available."""
+    if list_name not in PACK_BACKED_LISTS:
+        return None
+    packs_dir, packs_default, _max_keep = _packs_env()
+    dv = dictpacks.get_default_version(env_override=packs_dir, env_default=packs_default)
+    if not dv:
+        return None
+    fn = ALLOWED_LISTS[list_name]
+    try:
+        p = dictpacks.pack_file_path(dv, fn, env_override=packs_dir)
+        if not p.exists() or not p.is_file():
+            return None
+        return (dv, _read_text_robust(p))
+    except Exception:
+        return None
 
 
 def _assert_list_name(list_name: str) -> str:
@@ -319,6 +380,31 @@ def wordlists_meta(db: Session = Depends(get_db)) -> Dict[str, Dict[str, Optiona
     """봇/클라이언트가 캐시 갱신 판단에 쓰는 메타."""
     out: Dict[str, Dict[str, Optional[str]]] = {}
     for name in ALLOWED_LISTS.keys():
+        # ✅ 월별(버전) 단어 DB 팩이 존재하면, suggestion/blue_archive_words는
+        #    DB가 아니라 "default_version" 파일 메타를 반환한다.
+        if name in PACK_BACKED_LISTS:
+            packs_dir, packs_default, _max_keep = _packs_env()
+            dv = dictpacks.get_default_version(env_override=packs_dir, env_default=packs_default)
+            if dv:
+                try:
+                    p = dictpacks.pack_file_path(dv, ALLOWED_LISTS[name], env_override=packs_dir)
+                    if p.exists() and p.is_file():
+                        txt = _read_text_robust(p)
+                        words = _parse_txt(txt)
+                        last_updated = datetime.fromtimestamp(p.stat().st_mtime)
+                        out[name] = {
+                            "filename": ALLOWED_LISTS[name],
+                            "count": str(len(words)),
+                            "updated_at": last_updated.isoformat(),
+                            "version": f"dict:{dv}",
+                            "dict_version": dv,
+                            "sha256": _sha256(_build_txt(words)),
+                        }
+                        continue
+                except Exception:
+                    # 파일 기반 메타가 실패하면 DB 기반 메타로 폴백
+                    pass
+
         q = db.query(models.BlueWarWord).filter(models.BlueWarWord.list_name == name)
         count = q.count()
         last_updated: Optional[datetime] = (
@@ -340,6 +426,53 @@ def wordlists_meta(db: Session = Depends(get_db)) -> Dict[str, Dict[str, Optiona
     return out
 
 
+@router.get("/manifest.json")
+def dictpacks_manifest(
+    _: None = Depends(_require_wordlist_token),
+) -> Dict[str, object]:
+    """월별(버전) 단어 DB 팩 목록/메타.
+
+    - shiho(봇) autosync에서 이걸 읽어서 최신 3개를 맞춘다.
+    - 토큰이 없으면 404로 숨긴다.
+    """
+    packs_dir, packs_default, max_keep = _packs_env()
+    return dictpacks.build_manifest(
+        env_override=packs_dir,
+        env_default=packs_default,
+        max_keep=max_keep,
+    )
+
+
+@router.get("/{dict_version}/{filename}", response_class=PlainTextResponse)
+def dictpacks_file_txt(
+    dict_version: str,
+    filename: str,
+    _: None = Depends(_require_wordlist_token),
+) -> PlainTextResponse:
+    """특정 버전(YYYY-MM)의 원본 TXT를 제공한다.
+
+    예)
+      - /api/bluewar/wordlists/2025-12/blue_archive_words.txt
+      - /api/bluewar/wordlists/2025-12/suggestion.txt
+    """
+    packs_dir, _packs_default, _max_keep = _packs_env()
+    v = (dict_version or "").strip()
+    fn = (filename or "").strip()
+    if not dictpacks.is_valid_version(v):
+        raise HTTPException(status_code=404, detail="not found")
+    if fn not in dictpacks.PACK_FILES:
+        raise HTTPException(status_code=404, detail="not found")
+    try:
+        p = dictpacks.pack_file_path(v, fn, env_override=packs_dir)
+        if not p.exists() or not p.is_file():
+            raise HTTPException(status_code=404, detail="not found")
+        return PlainTextResponse(content=_read_text_robust(p))
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404, detail="not found")
+
+
 @router.get("/{list_name}.txt", response_class=PlainTextResponse)
 def wordlist_txt(
     list_name: str,
@@ -353,6 +486,13 @@ def wordlist_txt(
       - /api/bluewar/wordlists/blue_archive_words.txt
     """
     name = _assert_list_name(list_name)
+
+    # ✅ 월별(버전) 단어 DB 팩이 있으면 default 버전 파일을 우선 제공
+    pack = _packs_read_default_txt(name)
+    if pack is not None and name in PACK_BACKED_LISTS:
+        _dv, txt = pack
+        return PlainTextResponse(content=txt)
+
     words = (
         db.query(models.BlueWarWord)
         .filter(models.BlueWarWord.list_name == name)
@@ -373,6 +513,18 @@ def wordlist_download(
 ) -> Response:
     """브라우저에서 바로 다운로드되도록 Content-Disposition을 포함한다."""
     name = _assert_list_name(list_name)
+
+    # ✅ 월별(버전) 단어 DB 팩이 있으면 default 버전 파일을 우선 제공
+    pack = _packs_read_default_txt(name)
+    if pack is not None and name in PACK_BACKED_LISTS:
+        _dv, txt = pack
+        filename = ALLOWED_LISTS[name]
+        return Response(
+            content=txt,
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     words = (
         db.query(models.BlueWarWord)
         .filter(models.BlueWarWord.list_name == name)
