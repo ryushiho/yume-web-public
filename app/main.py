@@ -1,4 +1,13 @@
-# app/main.py
+"""FastAPI entrypoint.
+
+주의:
+- 부트스트랩/시드/마이그레이션 단계에서 예외가 발생하면 Uvicorn이 기동에 실패해서
+  Nginx에서 502로 보일 수 있다.
+- 운영 편의성을 위해, 초기화 단계는 가능한 한 *서비스 기동을 막지 않도록*
+  예외를 잡고 로그만 남긴다.
+"""
+
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -19,11 +28,15 @@ from app.seed_wordlists import seed_wordlist_snapshots
 from app import models
 from app.security import hash_password
 
-# 🔵 여기서 한 번 모든 모델 기반으로 테이블 생성
-# - 이미 있는 테이블은 건드리지 않고
-# - 없는 테이블만 새로 만든다 (데이터는 그대로 유지)
-Base.metadata.create_all(bind=engine)
-ensure_sqlite_schema(engine)
+logger = logging.getLogger(__name__)
+
+# 🔵 테이블 생성/스키마 보정
+# - 여기서 예외가 터지면 서비스 전체가 죽어서 502가 되므로, 기동은 유지한다.
+try:
+    Base.metadata.create_all(bind=engine)
+    ensure_sqlite_schema(engine)
+except Exception:
+    logger.exception("DB init failed (create_all / ensure_sqlite_schema)")
 
 app = FastAPI(
     title="Yume Admin",
@@ -108,43 +121,46 @@ def _startup_seed_import() -> None:
     # 시드 전적(blue_records.json)을 1회 반영 + 부트스트랩 관리자 지정
     db = SessionLocal()
     try:
-        ensure_blue_records_seed(db)
+        try:
+            ensure_blue_records_seed(db)
+        except Exception:
+            logger.exception("ensure_blue_records_seed failed")
 
-        # Phase 6: 기존 wordlist 데이터를 최초 1회 스냅샷으로 고정(버전/롤백용)
-        seed_wordlist_snapshots()
+        try:
+            # Phase 6: 기존 wordlist 데이터를 최초 1회 스냅샷으로 고정(버전/롤백용)
+            seed_wordlist_snapshots()
+        except Exception:
+            logger.exception("seed_wordlist_snapshots failed")
 
-        # ✅ 회원 관리자 권한 부트스트랩(안전한 방식)
-        # - 더 이상 회원 테이블을 통째로 삭제하지 않는다.
-        # - (선택) .env의 YUME_BOOTSTRAP_ADMIN_MEMBER_ID 로 지정된 '회원 아이디'가 있으면
-        #   그 계정을 관리자(is_admin=True)로 올려 준다.
-        # - 아무 계정도 없을 때만, 최소 1개의 초기 관리자(시호/miyo)를 생성한다.
+        try:
+            # ✅ 회원 관리자 권한 부트스트랩(안전한 방식)
+            bootstrap_id = getattr(settings, "BOOTSTRAP_ADMIN_MEMBER_ID", "").strip()
+            if bootstrap_id:
+                target = (
+                    db.query(models.MemberUser)
+                    .filter(models.MemberUser.discord_id == bootstrap_id)
+                    .first()
+                )
+                if target and not target.is_admin:
+                    target.is_admin = True
+                    db.add(target)
+                    db.commit()
 
-        # 1) 부트스트랩 아이디가 지정된 경우: 해당 회원을 admin으로 승격(존재하면)
-        bootstrap_id = getattr(settings, "BOOTSTRAP_ADMIN_MEMBER_ID", "").strip()
-        if bootstrap_id:
-            target = (
-                db.query(models.MemberUser)
-                .filter(models.MemberUser.discord_id == bootstrap_id)
-                .first()
-            )
-            if target and not target.is_admin:
-                target.is_admin = True
-                db.add(target)
+            # 2) 회원이 아예 없는 경우: 초기 관리자 1개만 생성(운영에서 바로 교체 권장)
+            any_member = db.query(models.MemberUser).first()
+            if not any_member:
+                admin_id = "시호"
+                admin_pw = "miyo"
+                m = models.MemberUser(
+                    discord_id=admin_id,
+                    nickname=admin_id,
+                    password_hash=hash_password(admin_pw),
+                    is_active=True,
+                    is_admin=True,
+                )
+                db.add(m)
                 db.commit()
-
-        # 2) 회원이 아예 없는 경우: 초기 관리자 1개만 생성(운영에서 바로 교체 권장)
-        any_member = db.query(models.MemberUser).first()
-        if not any_member:
-            admin_id = "시호"
-            admin_pw = "miyo"
-            m = models.MemberUser(
-                discord_id=admin_id,
-                nickname=admin_id,
-                password_hash=hash_password(admin_pw),
-                is_active=True,
-                is_admin=True,
-            )
-            db.add(m)
-            db.commit()
+        except Exception:
+            logger.exception("bootstrap admin seed failed")
     finally:
         db.close()

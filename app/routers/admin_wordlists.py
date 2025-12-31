@@ -31,6 +31,7 @@ from app.routers.api_wordlists import (
 from app.utils.time import fmt_kst
 from app.utils.wordlists import WORDLIST_LABELS
 from app.utils import dictpacks
+from app.utils.multipart_guard import HAS_MULTIPART
 from app.config import settings
 
 
@@ -146,63 +147,67 @@ def _decode_upload_txt(raw: bytes) -> str:
             raise ValueError("encoding")
 
 
-@router.post("/packs/upload")
-async def admin_packs_upload(
-    request: Request,
-    dict_version: str = Form(...),
-    blue_archive_words: UploadFile = File(...),
-    suggestion: UploadFile = File(...),
-    _admin: Dict[str, Any] = Depends(get_current_admin_user),
-):
-    """관리자 전용: 월별(버전) 단어 DB 팩 업로드.
+if HAS_MULTIPART:
+    @router.post("/packs/upload")
+    async def admin_packs_upload(
+        request: Request,
+        dict_version: str = Form(...),
+        blue_archive_words: UploadFile = File(...),
+        suggestion: UploadFile = File(...),
+        _admin: Dict[str, Any] = Depends(get_current_admin_user),
+    ):
+        """관리자 전용: 월별(버전) 단어 DB 팩 업로드 (multipart/form-data)."""
+        v = (dict_version or "").strip()
+        if not dictpacks.is_valid_version(v):
+            return RedirectResponse(url="/admin/wordlists/?error=invalid_pack&which=" + quote(v), status_code=303)
 
-    - dict_version: YYYY-MM
-    - blue_archive_words: blue_archive_words.txt
-    - suggestion: suggestion.txt
-    """
-    v = (dict_version or "").strip()
-    if not dictpacks.is_valid_version(v):
-        return RedirectResponse(url="/admin/wordlists/?error=invalid_pack&which=" + quote(v), status_code=303)
+        packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
+        packs_default = (settings.WORDLIST_PACKS_DEFAULT or "").strip()
+        packs_max_keep = int(getattr(settings, "WORDLIST_PACKS_MAX_KEEP", 3) or 3)
 
-    packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
-    packs_default = (settings.WORDLIST_PACKS_DEFAULT or "").strip()
-    packs_max_keep = int(getattr(settings, "WORDLIST_PACKS_MAX_KEEP", 3) or 3)
+        try:
+            raw1 = await blue_archive_words.read()
+            raw2 = await suggestion.read()
+            text1 = _decode_upload_txt(raw1)
+            text2 = _decode_upload_txt(raw2)
 
-    try:
-        raw1 = await blue_archive_words.read()
-        raw2 = await suggestion.read()
-        text1 = _decode_upload_txt(raw1)
-        text2 = _decode_upload_txt(raw2)
+            # 정규화(중복 제거 + 마지막 개행 보장)
+            words1 = _parse_txt(text1)
+            words2 = _parse_txt(text2)
+            norm1 = _build_txt(words1)
+            norm2 = _build_txt(words2)
 
-        # 정규화(중복 제거 + 마지막 개행 보장)
-        words1 = _parse_txt(text1)
-        words2 = _parse_txt(text2)
-        norm1 = _build_txt(words1)
-        norm2 = _build_txt(words2)
+            dictpacks.write_pack_files(
+                v,
+                blue_archive_words_txt=norm1,
+                suggestion_txt=norm2,
+                env_override=packs_dir,
+            )
 
-        dictpacks.write_pack_files(
-            v,
-            blue_archive_words_txt=norm1,
-            suggestion_txt=norm2,
-            env_override=packs_dir,
-        )
+            dictpacks.prune_versions(env_override=packs_dir, max_keep=packs_max_keep)
 
-        dictpacks.prune_versions(env_override=packs_dir, max_keep=packs_max_keep)
+            # default_version.txt가 없고 env로 강제하지 않는다면, 기본값을 최신으로 고정
+            if not packs_default:
+                df = dictpacks.default_file(packs_dir)
+                if not df.exists():
+                    latest = dictpacks.get_default_version(env_override=packs_dir, env_default="")
+                    if latest:
+                        dictpacks.set_default_version(latest, env_override=packs_dir)
+        except ValueError as e:
+            code = str(e)
+            return RedirectResponse(url=f"/admin/wordlists/?error={code}&which=pack", status_code=303)
+        except Exception:
+            return RedirectResponse(url="/admin/wordlists/?error=pack_upload&which=pack", status_code=303)
 
-        # default_version.txt가 없고 env로 강제하지 않는다면, 기본값을 최신으로 고정
-        if not packs_default:
-            df = dictpacks.default_file(packs_dir)
-            if not df.exists():
-                latest = dictpacks.get_default_version(env_override=packs_dir, env_default="")
-                if latest:
-                    dictpacks.set_default_version(latest, env_override=packs_dir)
-    except ValueError as e:
-        code = str(e)
-        return RedirectResponse(url=f"/admin/wordlists/?error={code}&which=pack", status_code=303)
-    except Exception:
-        return RedirectResponse(url="/admin/wordlists/?error=pack_upload&which=pack", status_code=303)
-
-    return RedirectResponse(url=f"/admin/wordlists/?ok=1&which=pack:{quote(v)}", status_code=303)
+        return RedirectResponse(url=f"/admin/wordlists/?ok=1&which=pack:{quote(v)}", status_code=303)
+else:
+    @router.post("/packs/upload")
+    async def admin_packs_upload(
+        _request: Request,
+        _admin: Dict[str, Any] = Depends(get_current_admin_user),
+    ):
+        """multipart 미설치 환경: 업로드 엔드포인트를 비활성화한다(서비스 기동은 유지)."""
+        return RedirectResponse(url="/admin/wordlists/?error=multipart_missing&which=pack", status_code=303)
 
 
 @router.post("/packs/delete/{dict_version}")
@@ -333,65 +338,73 @@ def admin_wordlist_detail(
     )
 
 
-@router.post("/upload/{list_name}")
-async def admin_wordlists_upload(
-    request: Request,
-    list_name: str,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    _admin: Dict[str, Any] = Depends(get_current_admin_user),
-):
-    """관리자 페이지 폼 업로드 처리(전체 덮어쓰기).
+if HAS_MULTIPART:
+    @router.post("/upload/{list_name}")
+    async def admin_wordlists_upload(
+        request: Request,
+        list_name: str,
+        file: UploadFile = File(...),
+        db: Session = Depends(get_db),
+        _admin: Dict[str, Any] = Depends(get_current_admin_user),
+    ):
+        """관리자 페이지 폼 업로드 처리(전체 덮어쓰기).
 
-    - overview(/admin/wordlists/)에서 호출되면 overview로 돌아감
-    - detail(/admin/wordlists/{list_name})에서 호출되면 next=... 쿼리로 돌아감
-    """
-    next_url = (request.query_params.get("next") or "").strip()
-    # open redirect 방지: 내부 경로만 허용
-    if next_url and not next_url.startswith("/admin/wordlists"):
-        next_url = ""
+        - overview(/admin/wordlists/)에서 호출되면 overview로 돌아감
+        - detail(/admin/wordlists/{list_name})에서 호출되면 next=... 쿼리로 돌아감
+        """
+        next_url = (request.query_params.get("next") or "").strip()
+        # open redirect 방지: 내부 경로만 허용
+        if next_url and not next_url.startswith("/admin/wordlists"):
+            next_url = ""
 
-    def _redir(url: str) -> RedirectResponse:
-        return RedirectResponse(url=url, status_code=303)
+        def _redir(url: str) -> RedirectResponse:
+            return RedirectResponse(url=url, status_code=303)
 
-    def _redir_error(err: str, which_name: str) -> RedirectResponse:
+        def _redir_error(err: str, which_name: str) -> RedirectResponse:
+            if next_url:
+                sep = "&" if "?" in next_url else "?"
+                return _redir(url=f"{next_url}{sep}error={err}")
+            return _redir(url=f"/admin/wordlists/?error={err}&which={which_name}")
+
+        try:
+            name = _assert_list_name(list_name)
+        except HTTPException:
+            return _redir(url="/admin/wordlists/?error=unknown&which=" + str(list_name))
+
+        raw = await file.read()
+        if raw is None or len(raw) == 0:
+            return _redir_error("empty", name)
+        if len(raw) > 5 * 1024 * 1024:
+            return _redir_error("toolarge", name)
+
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                text = raw.decode("cp949")
+            except Exception:
+                return _redir_error("encoding", name)
+
+        words = _parse_txt(text)
+        try:
+            _upsert_wordlist_overwrite(db, name, words)
+            _create_snapshot(db, name, action="upload", actor=_admin, note=f"filename:{file.filename}")
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return _redir_error("dup", name)
+
         if next_url:
             sep = "&" if "?" in next_url else "?"
-            return _redir(url=f"{next_url}{sep}error={err}")
-        return _redir(url=f"/admin/wordlists/?error={err}&which={which_name}")
-
-    try:
-        name = _assert_list_name(list_name)
-    except HTTPException:
-        return _redir(url="/admin/wordlists/?error=unknown&which=" + str(list_name))
-
-    raw = await file.read()
-    if raw is None or len(raw) == 0:
-        return _redir_error("empty", name)
-    if len(raw) > 5 * 1024 * 1024:
-        return _redir_error("toolarge", name)
-
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        try:
-            text = raw.decode("cp949")
-        except Exception:
-            return _redir_error("encoding", name)
-
-    words = _parse_txt(text)
-    try:
-        _upsert_wordlist_overwrite(db, name, words)
-        _create_snapshot(db, name, action="upload", actor=_admin, note=f"filename:{file.filename}")
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        return _redir_error("dup", name)
-
-    if next_url:
-        sep = "&" if "?" in next_url else "?"
-        return _redir(url=f"{next_url}{sep}ok=1")
-    return _redir(url=f"/admin/wordlists/?ok=1&which={name}")
+            return _redir(url=f"{next_url}{sep}ok=1")
+        return _redir(url=f"/admin/wordlists/?ok=1&which={name}")
+else:
+    @router.post("/upload/{list_name}")
+    async def admin_wordlists_upload(
+        list_name: str,
+        _admin: Dict[str, Any] = Depends(get_current_admin_user),
+    ):
+        return RedirectResponse(url=f"/admin/wordlists/?error=multipart_missing&which={quote(list_name)}", status_code=303)
 
 
 @router.post("/{list_name}/add")

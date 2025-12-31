@@ -16,6 +16,7 @@ from app.dependencies import get_db, get_current_admin_user_api
 from app import models
 from app.config import settings
 from app.utils import dictpacks
+from app.utils.multipart_guard import HAS_MULTIPART
 
 
 MAX_PAGE_SIZE = 1000
@@ -585,50 +586,86 @@ def wordlist_words(
     }
 
 
-@router.post("/{list_name}/upload")
-async def wordlist_upload(
-    list_name: str,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    actor: dict = Depends(get_current_admin_user_api),
-) -> Dict[str, str]:
-    """관리자 전용: txt 업로드로 전체 덮어쓰기.
+if HAS_MULTIPART:
+    @router.post("/{list_name}/upload")
+    async def wordlist_upload(
+        list_name: str,
+        file: UploadFile = File(...),
+        db: Session = Depends(get_db),
+        actor: dict = Depends(get_current_admin_user_api),
+    ) -> Dict[str, str]:
+        """관리자 전용: txt 업로드로 전체 덮어쓰기.
 
-    - multipart/form-data
-    - file: UploadFile (.txt)
-    """
-    name = _assert_list_name(list_name)
+        - multipart/form-data
+        - file: UploadFile (.txt)
+        """
+        name = _assert_list_name(list_name)
 
-    raw = await file.read()
-    if raw is None or len(raw) == 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="empty file")
-    if len(raw) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file too large")
+        raw = await file.read()
+        if raw is None or len(raw) == 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="empty file")
+        if len(raw) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file too large")
 
-    # 원칙: UTF-8 권장. 다만 업로드 UX를 위해 CP949 한 번 더 시도한다.
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
+        # 원칙: UTF-8 권장. 다만 업로드 UX를 위해 CP949 한 번 더 시도한다.
         try:
-            text = raw.decode("cp949")
-        except Exception:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="unsupported encoding (use UTF-8)")
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                text = raw.decode("cp949")
+            except Exception:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="unsupported encoding (use UTF-8)")
 
-    words = _parse_txt(text)
-    _upsert_wordlist_overwrite(db, name, words)
+        words = _parse_txt(text)
+        _upsert_wordlist_overwrite(db, name, words)
 
-    # 업로드 변경을 버전으로 남긴다.
-    _create_snapshot(db, name, action="upload", actor=actor, note=f"filename:{file.filename}")
-    db.commit()
+        # 업로드 변경을 버전으로 남긴다.
+        _create_snapshot(db, name, action="upload", actor=actor, note=f"filename:{file.filename}")
+        db.commit()
 
-    txt = _build_txt(words)
-    return {
-        "list_name": name,
-        "filename": ALLOWED_LISTS[name],
-        "count": str(len(words)),
-        "version": str(_current_version(db, name)),
-        "sha256": _sha256(txt),
-    }
+        txt = _build_txt(words)
+        return {
+            "list_name": name,
+            "filename": ALLOWED_LISTS[name],
+            "count": str(len(words)),
+            "version": str(_current_version(db, name)),
+            "sha256": _sha256(txt),
+        }
+else:
+    @router.post("/{list_name}/upload")
+    async def wordlist_upload(
+        list_name: str,
+        payload: Dict[str, str] = Body(...),
+        db: Session = Depends(get_db),
+        actor: dict = Depends(get_current_admin_user_api),
+    ) -> Dict[str, str]:
+        """관리자 전용: txt 업로드(멀티파트 미지원 환경).
+
+        Body(JSON): {"text": "...", "filename": "optional.txt"}
+        """
+        name = _assert_list_name(list_name)
+
+        text = (payload.get("text") or "")
+        if not text.strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="empty text")
+        if len(text.encode("utf-8")) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="text too large")
+
+        words = _parse_txt(text)
+        _upsert_wordlist_overwrite(db, name, words)
+
+        fn = (payload.get("filename") or "").strip() or "(json)"
+        _create_snapshot(db, name, action="upload", actor=actor, note=f"filename:{fn}")
+        db.commit()
+
+        txt = _build_txt(words)
+        return {
+            "list_name": name,
+            "filename": ALLOWED_LISTS[name],
+            "count": str(len(words)),
+            "version": str(_current_version(db, name)),
+            "sha256": _sha256(txt),
+        }
 
 
 @router.get("/{list_name}/versions")
