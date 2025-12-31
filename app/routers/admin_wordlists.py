@@ -39,6 +39,21 @@ router = APIRouter(prefix="/admin/wordlists", tags=["admin-wordlists"])
 templates = Jinja2Templates(directory="app/templates")
 
 
+def _packs_tab_versions() -> list[str]:
+    """운영에서 고정으로 노출할 월별(버전) 탭 목록.
+
+    - .env: YUME_WORDLIST_PACKS_TABS="2025-10,2025-12,2026-01" 형태
+    - 미설정 시 기본 3개(10/12/1월)
+    """
+    tabs_raw = (getattr(settings, "WORDLIST_PACKS_TABS", "") or "").strip()
+    if tabs_raw:
+        out = [v.strip() for v in tabs_raw.split(",") if v.strip()]
+    else:
+        out = ["2025-10", "2025-12", "2026-01"]
+    # 유효성 필터
+    return [v for v in out if dictpacks.is_valid_version(v)]
+
+
 def _meta_for(db: Session, list_name: str) -> Dict[str, Optional[str]]:
     q = db.query(models.BlueWarWord).filter(models.BlueWarWord.list_name == list_name)
     count = q.count()
@@ -220,7 +235,12 @@ if HAS_MULTIPART:
                 env_override=packs_dir,
             )
 
-            dictpacks.prune_versions(env_override=packs_dir, max_keep=packs_max_keep)
+            # 고정 탭(예: 10/12/1월)은 자동 삭제에서 제외한다.
+            dictpacks.prune_versions(
+                env_override=packs_dir,
+                max_keep=packs_max_keep,
+                keep_versions=_packs_tab_versions(),
+            )
 
             # default_version.txt가 없고 env로 강제하지 않는다면, 기본값을 최신으로 고정
             if not packs_default:
@@ -395,7 +415,11 @@ if HAS_MULTIPART:
             tmp.write_text(norm, encoding="utf-8")
             tmp.replace(p)
 
-            dictpacks.prune_versions(env_override=packs_dir, max_keep=packs_max_keep)
+            dictpacks.prune_versions(
+                env_override=packs_dir,
+                max_keep=packs_max_keep,
+                keep_versions=_packs_tab_versions(),
+            )
 
             # default_version.txt가 없고 env로 강제하지 않는다면, 기본값을 최신으로 고정
             if not packs_default:

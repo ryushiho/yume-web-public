@@ -198,16 +198,49 @@ def build_manifest(*, env_override: str = "", env_default: str = "", max_keep: i
     }
 
 
-def prune_versions(*, env_override: str = "", max_keep: int = 3) -> List[str]:
-    """Keep only newest max_keep versions. Return deleted versions."""
+def prune_versions(
+    *,
+    env_override: str = "",
+    max_keep: int = 3,
+    keep_versions: Optional[List[str]] = None,
+) -> List[str]:
+    """Keep only newest versions. Return deleted versions.
+
+    Rules:
+    - Always preserve keep_versions ("pinned" packs), if provided.
+    - From the remaining versions, keep only the newest N where
+        N = max(0, max_keep - len(pinned)).
+
+    This prevents 운영에서 고정 탭(예: 10/12/1월)이
+    "오래됐다"는 이유만으로 자동 삭제되는 사고를 막는다.
+    """
+
     max_keep = int(max_keep or 0)
     if max_keep <= 0:
         return []
+
     versions = list_versions(env_override)
-    if len(versions) <= max_keep:
+    if not versions:
         return []
 
-    to_delete = versions[: max(0, len(versions) - max_keep)]
+    pinned: set[str] = set()
+    if keep_versions:
+        for v in keep_versions:
+            vv = (v or "").strip()
+            if is_valid_version(vv):
+                pinned.add(vv)
+
+    non_pinned = [v for v in versions if v not in pinned]
+
+    budget = max_keep - len(pinned)
+    if budget < 0:
+        budget = 0
+    keep_non_pinned = set(non_pinned[-budget:]) if budget > 0 else set()
+
+    to_delete = [v for v in non_pinned if v not in keep_non_pinned]
+    if not to_delete:
+        return []
+
     deleted: List[str] = []
     for v in to_delete:
         p = pack_path(v, env_override=env_override)
