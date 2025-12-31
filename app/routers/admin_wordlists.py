@@ -113,6 +113,35 @@ def admin_wordlists_page(
     pack_default = dictpacks.get_default_version(env_override=packs_dir, env_default=packs_default)
     pack_manifest = dictpacks.build_manifest(env_override=packs_dir, env_default=packs_default, max_keep=packs_max_keep)
 
+
+    # 월별(버전) 팩 업로드 '고정 탭' (예: 10월/12월/1월)
+    tabs_raw = (getattr(settings, "WORDLIST_PACKS_TABS", "") or "").strip()
+    if tabs_raw:
+        _tab_versions = [v.strip() for v in tabs_raw.split(",") if v.strip()]
+    else:
+        # 기본값: 운영에서 가장 자주 쓰는 3개(예: 2025-10 / 2025-12 / 2026-01)
+        _tab_versions = ["2025-10", "2025-12", "2026-01"]
+
+    _versions_index = {
+        str(it.get("version")): it
+        for it in (pack_manifest.get("versions") or [])
+        if isinstance(it, dict) and it.get("version") is not None
+    }
+
+    packs_tabs = []
+    for v in _tab_versions:
+        vv = str(v or "").strip()
+        if not dictpacks.is_valid_version(vv):
+            continue
+        try:
+            mm = int(vv.split("-")[1])
+            label = f"{mm}월"
+        except Exception:
+            label = vv
+        files = (_versions_index.get(vv) or {}).get("files") or {}
+        packs_tabs.append({"version": vv, "label": label, "files": files, "is_default": (vv == pack_default)})
+
+
     return templates.TemplateResponse(
         "admin_wordlists.html",
         {
@@ -125,6 +154,7 @@ def admin_wordlists_page(
 
             # packs
             "packs_manifest": pack_manifest,
+            "packs_tabs": packs_tabs,
             "packs_versions": pack_versions,
             "packs_default": pack_default,
             "packs_max_keep": packs_max_keep,
@@ -154,6 +184,7 @@ if HAS_MULTIPART:
         dict_version: str = Form(...),
         blue_archive_words: UploadFile = File(...),
         suggestion: UploadFile = File(...),
+        public_words: UploadFile = File(...),
         _admin: Dict[str, Any] = Depends(get_current_admin_user),
     ):
         """관리자 전용: 월별(버전) 단어 DB 팩 업로드 (multipart/form-data)."""
@@ -168,19 +199,24 @@ if HAS_MULTIPART:
         try:
             raw1 = await blue_archive_words.read()
             raw2 = await suggestion.read()
+            raw3 = await public_words.read()
             text1 = _decode_upload_txt(raw1)
             text2 = _decode_upload_txt(raw2)
+            text3 = _decode_upload_txt(raw3)
 
             # 정규화(중복 제거 + 마지막 개행 보장)
             words1 = _parse_txt(text1)
             words2 = _parse_txt(text2)
+            words3 = _parse_txt(text3)
             norm1 = _build_txt(words1)
             norm2 = _build_txt(words2)
+            norm3 = _build_txt(words3)
 
             dictpacks.write_pack_files(
                 v,
                 blue_archive_words_txt=norm1,
                 suggestion_txt=norm2,
+                public_words_txt=norm3,
                 env_override=packs_dir,
             )
 

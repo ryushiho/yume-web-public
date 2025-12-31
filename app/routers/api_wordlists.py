@@ -85,7 +85,7 @@ ALLOWED_LISTS = {
 
 # 월별(버전) 단어 DB 팩이 활성화되어 있으면,
 # suggestion / blue_archive_words 의 .txt 응답은 "default_version" 파일을 우선 제공한다.
-PACK_BACKED_LISTS = {"suggestion", "blue_archive_words"}
+PACK_BACKED_LISTS = {"suggestion", "blue_archive_words", "public_words"}
 
 
 def _packs_env() -> tuple[str, str, int]:
@@ -455,6 +455,7 @@ def dictpacks_file_txt(
     예)
       - /api/bluewar/wordlists/2025-12/blue_archive_words.txt
       - /api/bluewar/wordlists/2025-12/suggestion.txt
+      - /api/bluewar/wordlists/2025-12/public_words.txt
     """
     packs_dir, _packs_default, _max_keep = _packs_env()
     v = (dict_version or "").strip()

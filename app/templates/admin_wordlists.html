@@ -84,17 +84,86 @@
 
     <hr style="border:none; border-top:1px solid #1f2937; margin:0.9rem 0;" />
 
-    <form action="/admin/wordlists/packs/upload" method="post" enctype="multipart/form-data">
-      <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-        <input name="dict_version" placeholder="YYYY-MM (예: 2025-12)" required style="min-width:220px;" />
-        <input type="file" name="blue_archive_words" accept=".txt,text/plain" required style="color:#e5e7eb;" />
-        <input type="file" name="suggestion" accept=".txt,text/plain" required style="color:#e5e7eb;" />
-        <button type="submit" class="btn btn-primary">월별 팩 업로드</button>
-      </div>
-      <div style="color:#9ca3af; font-size:0.8rem; margin-top:0.35rem;">
-        업로드하면 <b>최대 {{ packs_max_keep }}개</b>만 남기고 오래된 버전은 자동 삭제해.
-      </div>
-    </form>
+    
+    <div style="margin-top:0.6rem;">
+      <h3 style="margin:0 0 0.5rem 0;">월별 팩 업로드 (10월/12월/1월)</h3>
+
+      {% if packs_tabs and packs_tabs|length > 0 %}
+        <div id="packsTabs" style="display:flex; gap:0.35rem; flex-wrap:wrap; margin-bottom:0.6rem;">
+          {% for t in packs_tabs %}
+            <button type="button" class="btn btn-secondary packs-tab-btn" data-tab="{{ t.version }}"
+              style="padding:0.35rem 0.6rem; {% if t.is_default %}border:1px solid #22c55e;{% endif %}">
+              {{ t.label }}
+            </button>
+          {% endfor %}
+        </div>
+
+        {% for t in packs_tabs %}
+          <div class="packs-tab-panel" id="packs-tab-{{ t.version }}" style="display:none; padding:0.6rem; border:1px solid #1f2937; border-radius:0.6rem; margin-bottom:0.7rem;">
+            <div style="display:flex; justify-content:space-between; gap:0.6rem; flex-wrap:wrap; align-items:flex-end;">
+              <div>
+                <div style="font-weight:700;">{{ t.label }} ({{ t.version }})</div>
+                <div style="color:#9ca3af; font-size:0.82rem; margin-top:0.2rem;">
+                  {% if t.files %}
+                    {% set f1 = t.files.get('blue_archive_words.txt') %}
+                    {% set f2 = t.files.get('suggestion.txt') %}
+                    {% set f3 = t.files.get('public_words.txt') %}
+                    루트전: {{ (f1.get('size') if f1 else '-') }}B /
+                    시작단어: {{ (f2.get('size') if f2 else '-') }}B /
+                    전체단어: {{ (f3.get('size') if f3 else '-') }}B
+                  {% else %}
+                    아직 업로드된 파일이 없어.
+                  {% endif %}
+                </div>
+              </div>
+              <div style="color:#9ca3af; font-size:0.78rem;">
+                업로드하면 <b>최대 {{ packs_max_keep }}개</b>만 남기고 오래된 버전은 자동 삭제해.
+              </div>
+            </div>
+
+            <form action="/admin/wordlists/packs/upload" method="post" enctype="multipart/form-data" style="margin-top:0.6rem;">
+              <input type="hidden" name="dict_version" value="{{ t.version }}" />
+              <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+                <input type="file" name="blue_archive_words" accept=".txt,text/plain" required style="color:#e5e7eb;" />
+                <input type="file" name="suggestion" accept=".txt,text/plain" required style="color:#e5e7eb;" />
+                <input type="file" name="public_words" accept=".txt,text/plain" required style="color:#e5e7eb;" />
+                <button type="submit" class="btn btn-primary">업로드</button>
+              </div>
+              <div style="color:#9ca3af; font-size:0.8rem; margin-top:0.35rem;">
+                권장: UTF-8 / 1줄 1단어 / 중복은 자동 제거
+              </div>
+            </form>
+          </div>
+        {% endfor %}
+
+        <script>
+          (function() {
+            const btns = Array.from(document.querySelectorAll('.packs-tab-btn'));
+            const panels = Array.from(document.querySelectorAll('.packs-tab-panel'));
+            if (!btns.length) return;
+
+            function show(v) {
+              panels.forEach(p => p.style.display = (p.id === 'packs-tab-' + v) ? 'block' : 'none');
+              btns.forEach(b => {
+                const on = (b.getAttribute('data-tab') === v);
+                b.style.opacity = on ? '1' : '0.65';
+              });
+            }
+
+            const qp = new URLSearchParams(window.location.search);
+            const q = (qp.get('packtab') || '').trim();
+            const initial = (q && btns.some(b => b.getAttribute('data-tab') === q)) ? q : btns[0].getAttribute('data-tab');
+            show(initial);
+            btns.forEach(b => b.addEventListener('click', () => show(b.getAttribute('data-tab'))));
+          })();
+        </script>
+      {% else %}
+        <div style="color:#9ca3af; font-size:0.85rem;">
+          탭 설정이 비어 있어. 서버 <code>.env</code>에 <code>YUME_WORDLIST_PACKS_TABS</code>를 설정해줘.
+        </div>
+      {% endif %}
+    </div>
+
   </div>
 
   <div style="display:grid; grid-template-columns: 1fr; gap: 1.2rem;">

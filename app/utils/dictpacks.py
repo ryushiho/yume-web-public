@@ -14,6 +14,7 @@ Directory layout (default):
       2025-10/
         blue_archive_words.txt
         suggestion.txt
+        public_words.txt
       2025-12/
         ...
 
@@ -21,6 +22,7 @@ The API layer can serve:
 - /api/bluewar/wordlists/manifest.json
 - /api/bluewar/wordlists/<YYYY-MM>/blue_archive_words.txt
 - /api/bluewar/wordlists/<YYYY-MM>/suggestion.txt
+- /api/bluewar/wordlists/<YYYY-MM>/public_words.txt
 
 And legacy endpoints can serve the "default" version.
 """
@@ -40,7 +42,7 @@ from typing import Dict, List, Optional
 VERSION_RE = re.compile(r"^\d{4}-\d{2}$")
 
 # Game-required files per pack.
-PACK_FILES = ("blue_archive_words.txt", "suggestion.txt")
+PACK_FILES = ("blue_archive_words.txt", "suggestion.txt", "public_words.txt")
 
 
 @dataclass(frozen=True)
@@ -248,6 +250,7 @@ def write_pack_files(
     *,
     blue_archive_words_txt: str,
     suggestion_txt: str,
+    public_words_txt: str,
     env_override: str = "",
 ) -> None:
     """Write normalized TXT files for the given version."""
@@ -255,3 +258,4 @@ def write_pack_files(
     vdir.mkdir(parents=True, exist_ok=True)
     (vdir / "blue_archive_words.txt").write_text(blue_archive_words_txt, encoding="utf-8")
     (vdir / "suggestion.txt").write_text(suggestion_txt, encoding="utf-8")
+    (vdir / "public_words.txt").write_text(public_words_txt, encoding="utf-8")

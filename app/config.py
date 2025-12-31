@@ -35,7 +35,12 @@ class Settings:
         if self.WORDLIST_PACKS_MAX_KEEP < 1:
             self.WORDLIST_PACKS_MAX_KEEP = 3
 
-        # 기본(legacy) 경로로 내려줄 디폴트 버전 (선택)
+        
+        # 관리자 페이지 '월별 팩 업로드' 탭에 노출할 버전 목록 (쉼표 구분)
+        # 예: 2025-10,2025-12,2026-01
+        self.WORDLIST_PACKS_TABS: str = os.getenv("YUME_WORDLIST_PACKS_TABS", "").strip()
+
+# 기본(legacy) 경로로 내려줄 디폴트 버전 (선택)
         # - 지정하지 않으면: default_version.txt -> 최신 버전 순
         self.WORDLIST_PACKS_DEFAULT: str = os.getenv("YUME_WORDLIST_PACKS_DEFAULT", "").strip()
 
