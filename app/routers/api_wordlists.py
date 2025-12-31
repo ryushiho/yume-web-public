@@ -475,6 +475,36 @@ def dictpacks_file_txt(
         raise HTTPException(status_code=404, detail="not found")
 
 
+@router.get("/{dict_version}/{filename}/download")
+def dictpacks_file_download(
+    dict_version: str,
+    filename: str,
+    _: None = Depends(_require_wordlist_token),
+) -> Response:
+    """특정 버전(YYYY-MM)의 원본 TXT를 다운로드(attachment)로 제공한다."""
+    packs_dir, _packs_default, _max_keep = _packs_env()
+    v = (dict_version or "").strip()
+    fn = (filename or "").strip()
+    if not dictpacks.is_valid_version(v):
+        raise HTTPException(status_code=404, detail="not found")
+    if fn not in dictpacks.PACK_FILES:
+        raise HTTPException(status_code=404, detail="not found")
+    try:
+        p = dictpacks.pack_file_path(v, fn, env_override=packs_dir)
+        if not p.exists() or not p.is_file():
+            raise HTTPException(status_code=404, detail="not found")
+        txt = _read_text_robust(p)
+        return Response(
+            content=txt,
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{fn}"'},
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404, detail="not found")
+
+
 @router.get("/{list_name}.txt", response_class=PlainTextResponse)
 def wordlist_txt(
     list_name: str,

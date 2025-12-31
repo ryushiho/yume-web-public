@@ -292,6 +292,143 @@ async def admin_packs_set_default(
     return RedirectResponse(url=f"/admin/wordlists/?ok=1&which=pack_default:{quote(v)}", status_code=303)
 
 
+def _pack_list_name(list_name: str) -> str:
+    """월별(버전) 팩에서 관리할 3개 키만 허용."""
+    try:
+        return _assert_list_name(list_name)
+    except HTTPException:
+        raise
+
+
+@router.get("/packs/{dict_version}/{list_name}")
+def admin_pack_file_page(
+    request: Request,
+    dict_version: str,
+    list_name: str,
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    """월별(버전) 단어 DB 팩의 개별 파일 관리(간단 뷰/다운로드/업로드)."""
+    packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
+
+    v = (dict_version or "").strip()
+    if not dictpacks.is_valid_version(v):
+        return RedirectResponse(url="/admin/wordlists/?error=invalid_pack&which=" + quote(v), status_code=303)
+
+    name = _pack_list_name(list_name)
+    fn = ALLOWED_LISTS[name]
+
+    meta = None
+    text_preview = ""
+    try:
+        p = dictpacks.pack_file_path(v, fn, env_override=packs_dir)
+        if p.exists() and p.is_file():
+            m = dictpacks.file_meta(p)
+            meta = {
+                "filename": fn,
+                "size": m.size,
+                "sha256": m.sha256,
+                "updated_at": m.updated_at,
+            }
+            # 프리뷰는 최대 400줄만
+            raw = _decode_upload_txt(p.read_bytes())
+            lines = raw.splitlines()
+            text_preview = "\n".join(lines[:400])
+    except Exception:
+        meta = None
+        text_preview = ""
+
+    ok = request.query_params.get("ok")
+    error = request.query_params.get("error")
+
+    return templates.TemplateResponse(
+        "admin_pack_file.html",
+        {
+            "request": request,
+            "dict_version": v,
+            "list_name": name,
+            "list_label": WORDLIST_LABELS.get(name, fn),
+            "filename": fn,
+            "meta": meta,
+            "preview": text_preview,
+            "ok": ok,
+            "error": error,
+        },
+    )
+
+
+if HAS_MULTIPART:
+    @router.post("/packs/upload_one")
+    async def admin_packs_upload_one(
+        request: Request,
+        dict_version: str = Form(...),
+        list_name: str = Form(...),
+        file: UploadFile = File(...),
+        _admin: Dict[str, Any] = Depends(get_current_admin_user),
+    ):
+        """월별(버전) 팩에 파일 1개만 업로드(덮어쓰기).
+
+        UI에서 10월/12월/1월 탭을 눌러 3개 파일을 각각 업로드할 수 있도록 한다.
+        """
+        v = (dict_version or "").strip()
+        if not dictpacks.is_valid_version(v):
+            return RedirectResponse(url="/admin/wordlists/?error=invalid_pack&which=" + quote(v), status_code=303)
+
+        try:
+            name = _pack_list_name(list_name)
+        except HTTPException:
+            return RedirectResponse(url="/admin/wordlists/?error=unknown&which=" + quote(list_name), status_code=303)
+
+        packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
+        packs_default = (settings.WORDLIST_PACKS_DEFAULT or "").strip()
+        packs_max_keep = int(getattr(settings, "WORDLIST_PACKS_MAX_KEEP", 3) or 3)
+
+        try:
+            raw = await file.read()
+            text = _decode_upload_txt(raw)
+            words = _parse_txt(text)
+            norm = _build_txt(words)
+
+            fn = ALLOWED_LISTS[name]
+            p = dictpacks.pack_file_path(v, fn, env_override=packs_dir)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            tmp = p.with_suffix(p.suffix + ".tmp")
+            tmp.write_text(norm, encoding="utf-8")
+            tmp.replace(p)
+
+            dictpacks.prune_versions(env_override=packs_dir, max_keep=packs_max_keep)
+
+            # default_version.txt가 없고 env로 강제하지 않는다면, 기본값을 최신으로 고정
+            if not packs_default:
+                df = dictpacks.default_file(packs_dir)
+                if not df.exists():
+                    latest = dictpacks.get_default_version(env_override=packs_dir, env_default="")
+                    if latest:
+                        dictpacks.set_default_version(latest, env_override=packs_dir)
+        except ValueError as e:
+            code = str(e)
+            return RedirectResponse(
+                url=f"/admin/wordlists/packs/{quote(v)}/{quote(name)}?error={quote(code)}",
+                status_code=303,
+            )
+        except Exception:
+            return RedirectResponse(
+                url=f"/admin/wordlists/packs/{quote(v)}/{quote(name)}?error=pack_upload",
+                status_code=303,
+            )
+
+        return RedirectResponse(
+            url=f"/admin/wordlists/?ok=1&which=pack_one:{quote(v)}:{quote(name)}&packtab={quote(v)}",
+            status_code=303,
+        )
+else:
+    @router.post("/packs/upload_one")
+    async def admin_packs_upload_one(
+        _request: Request,
+        _admin: Dict[str, Any] = Depends(get_current_admin_user),
+    ):
+        return RedirectResponse(url="/admin/wordlists/?error=multipart_missing&which=pack", status_code=303)
+
+
 @router.get("/{list_name}")
 def admin_wordlist_detail(
     request: Request,

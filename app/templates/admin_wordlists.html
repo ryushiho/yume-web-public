@@ -65,6 +65,7 @@
               <div style="color:#9ca3af; font-size:0.82rem; margin-top:0.15rem;">
                 <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ v }}/blue_archive_words.txt" target="_blank">루트전 단어</a>
                 <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ v }}/suggestion.txt" target="_blank">시작 단어</a>
+                <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ v }}/public_words.txt" target="_blank">전체 단어</a>
               </div>
             </div>
             <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
@@ -86,7 +87,7 @@
 
     
     <div style="margin-top:0.6rem;">
-      <h3 style="margin:0 0 0.5rem 0;">월별 팩 업로드 (10월/12월/1월)</h3>
+      <h3 style="margin:0 0 0.5rem 0;">월별 단어 DB (10월/12월/1월)</h3>
 
       {% if packs_tabs and packs_tabs|length > 0 %}
         <div id="packsTabs" style="display:flex; gap:0.35rem; flex-wrap:wrap; margin-bottom:0.6rem;">
@@ -99,40 +100,65 @@
         </div>
 
         {% for t in packs_tabs %}
-          <div class="packs-tab-panel" id="packs-tab-{{ t.version }}" style="display:none; padding:0.6rem; border:1px solid #1f2937; border-radius:0.6rem; margin-bottom:0.7rem;">
-            <div style="display:flex; justify-content:space-between; gap:0.6rem; flex-wrap:wrap; align-items:flex-end;">
+          <div class="packs-tab-panel" id="packs-tab-{{ t.version }}" style="display:none;">
+            <div style="display:flex; justify-content:space-between; gap:0.6rem; flex-wrap:wrap; align-items:flex-end; margin-bottom:0.7rem;">
               <div>
                 <div style="font-weight:700;">{{ t.label }} ({{ t.version }})</div>
                 <div style="color:#9ca3af; font-size:0.82rem; margin-top:0.2rem;">
-                  {% if t.files %}
-                    {% set f1 = t.files.get('blue_archive_words.txt') %}
-                    {% set f2 = t.files.get('suggestion.txt') %}
-                    {% set f3 = t.files.get('public_words.txt') %}
-                    루트전: {{ (f1.get('size') if f1 else '-') }}B /
-                    시작단어: {{ (f2.get('size') if f2 else '-') }}B /
-                    전체단어: {{ (f3.get('size') if f3 else '-') }}B
-                  {% else %}
-                    아직 업로드된 파일이 없어.
-                  {% endif %}
+                  업로드하면 <b>최대 {{ packs_max_keep }}개</b>만 남기고 오래된 버전은 자동 삭제해.
                 </div>
               </div>
               <div style="color:#9ca3af; font-size:0.78rem;">
-                업로드하면 <b>최대 {{ packs_max_keep }}개</b>만 남기고 오래된 버전은 자동 삭제해.
+                이 탭에서 3개 파일을 각각 업로드해.
               </div>
             </div>
 
-            <form action="/admin/wordlists/packs/upload" method="post" enctype="multipart/form-data" style="margin-top:0.6rem;">
-              <input type="hidden" name="dict_version" value="{{ t.version }}" />
-              <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-                <input type="file" name="blue_archive_words" accept=".txt,text/plain" required style="color:#e5e7eb;" />
-                <input type="file" name="suggestion" accept=".txt,text/plain" required style="color:#e5e7eb;" />
-                <input type="file" name="public_words" accept=".txt,text/plain" required style="color:#e5e7eb;" />
-                <button type="submit" class="btn btn-primary">업로드</button>
-              </div>
-              <div style="color:#9ca3af; font-size:0.8rem; margin-top:0.35rem;">
-                권장: UTF-8 / 1줄 1단어 / 중복은 자동 제거
-              </div>
-            </form>
+            {% set pack_items = [
+              {'name':'suggestion', 'label':'시작 단어', 'filename':'suggestion.txt'},
+              {'name':'blue_archive_words', 'label':'루트전 단어', 'filename':'blue_archive_words.txt'},
+              {'name':'public_words', 'label':'전체 단어 목록', 'filename':'public_words.txt'}
+            ] %}
+
+            <div style="display:grid; grid-template-columns: 1fr; gap: 1.0rem;">
+              {% for it in pack_items %}
+                {% set fm = (t.files.get(it.filename) if t.files else None) %}
+                <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+                    <div>
+                      <div style="font-weight:700; font-size:1.05rem;">
+                        {{ it.label }}
+                        <span style="color:#9ca3af; font-weight:500; font-size:0.9rem;">({{ it.filename }})</span>
+                      </div>
+                      <div style="color:#9ca3af; font-size:0.85rem; margin-top:0.2rem;">
+                        버전: <b>{{ t.version }}</b>
+                        · 크기: <b>{{ (fm.get('size') if fm else '-') }}</b>
+                        {% if fm and fm.get('updated_at') %}· 최근 수정: {{ fm.get('updated_at') }}{% endif %}
+                        {% if not fm %}<span style="margin-left:0.35rem; color:#f59e0b;">(아직 없음)</span>{% endif %}
+                      </div>
+                    </div>
+                    <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
+                      <a class="btn btn-secondary" href="/admin/wordlists/packs/{{ t.version }}/{{ it.name }}">관리</a>
+                      <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ t.version }}/{{ it.filename }}" target="_blank">보기</a>
+                      <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ t.version }}/{{ it.filename }}/download">다운로드</a>
+                    </div>
+                  </div>
+
+                  <hr style="border:none; border-top:1px solid #1f2937; margin:0.9rem 0;" />
+
+                  <form action="/admin/wordlists/packs/upload_one" method="post" enctype="multipart/form-data">
+                    <input type="hidden" name="dict_version" value="{{ t.version }}" />
+                    <input type="hidden" name="list_name" value="{{ it.name }}" />
+                    <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+                      <input type="file" name="file" accept=".txt,text/plain" required style="color:#e5e7eb;" />
+                      <button type="submit" class="btn btn-primary">TXT 업로드 (덮어쓰기)</button>
+                    </div>
+                    <div style="color:#9ca3af; font-size:0.8rem; margin-top:0.35rem;">
+                      권장: UTF-8 / 1줄 1단어 / 중복은 자동 제거
+                    </div>
+                  </form>
+                </div>
+              {% endfor %}
+            </div>
           </div>
         {% endfor %}
 
@@ -166,41 +192,5 @@
 
   </div>
 
-  <div style="display:grid; grid-template-columns: 1fr; gap: 1.2rem;">
-    {% for key, meta in metas.items() %}
-      <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
-          <div>
-            <div style="font-weight:700; font-size:1.05rem;">
-              {{ list_labels.get(key, meta.filename) }}
-              <span style="color:#9ca3af; font-weight:500; font-size:0.9rem;">({{ meta.filename }})</span>
-            </div>
-            <div style="color:#9ca3af; font-size:0.85rem; margin-top:0.2rem;">
-              리스트 키: <code style="color:#e5e7eb;">{{ key }}</code>
-              · 단어 수: <b>{{ meta.count }}</b>
-              · 버전: <b>{{ meta.version }}</b>
-              {% if meta.updated_at %}· 최근 수정: {{ meta.updated_at }}{% endif %}
-            </div>
-          </div>
-          <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
-            <a class="btn btn-secondary" href="/admin/wordlists/{{ key }}">관리</a>
-            <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ key }}.txt" target="_blank">보기</a>
-            <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ key }}/download">다운로드</a>
-          </div>
-        </div>
-
-        <hr style="border:none; border-top:1px solid #1f2937; margin:0.9rem 0;" />
-
-        <form action="/admin/wordlists/upload/{{ key }}" method="post" enctype="multipart/form-data">
-          <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
-            <input type="file" name="file" accept=".txt,text/plain" required style="color:#e5e7eb;" />
-            <button type="submit" class="btn btn-primary">TXT 업로드 (덮어쓰기)</button>
-          </div>
-          <div style="color:#9ca3af; font-size:0.8rem; margin-top:0.35rem;">
-            권장: UTF-8 / 1줄 1단어 / 중복은 자동 제거
-          </div>
-        </form>
-      </div>
-    {% endfor %}
-  </div>
+  <!-- DB 기반(리스트 키) 관리 UI는 잠시 숨김: 월별 팩 중심 운영 -->
 {% endblock %}

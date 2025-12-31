@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}월별 단어 DB - {{ list_label }} ({{ dict_version }}){% endblock %}
+{% block header_title %}단어 DB{% endblock %}
+
+{% block content %}
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+    <div>
+      <h1 style="margin-bottom:0.25rem;">
+        {{ list_label }}
+        <span style="color:#9ca3af; font-weight:500; font-size:0.9rem;">({{ filename }})</span>
+      </h1>
+      <div style="color:#9ca3af; font-size:0.9rem;">
+        버전: <b>{{ dict_version }}</b>
+        · 리스트 키: <code style="color:#e5e7eb;">{{ list_name }}</code>
+        {% if meta %}
+          · 크기: <b>{{ meta.size }}</b>
+          · sha256: <code style="color:#e5e7eb;">{{ meta.sha256[:10] }}...</code>
+          {% if meta.updated_at %}· 최근 수정: {{ meta.updated_at }}{% endif %}
+        {% else %}
+          · <span style="color:#f59e0b;">아직 파일이 없어.</span>
+        {% endif %}
+      </div>
+    </div>
+    <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
+      <a class="btn btn-secondary" href="/admin/wordlists/?packtab={{ dict_version }}">목록</a>
+      <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ dict_version }}/{{ filename }}" target="_blank">TXT 보기</a>
+      <a class="btn btn-secondary" href="/api/bluewar/wordlists/{{ dict_version }}/{{ filename }}/download">다운로드</a>
+    </div>
+  </div>
+
+  {% if ok %}
+    <div style="padding:0.6rem 0.8rem; background:#0b3a2a; border:1px solid #064e3b; border-radius:0.5rem; margin:1rem 0;">
+      ✅ 저장 완료
+    </div>
+  {% endif %}
+
+  {% if error %}
+    <div style="padding:0.6rem 0.8rem; background:#3a0b0b; border:1px solid #7f1d1d; border-radius:0.5rem; margin:1rem 0;">
+      ❌ 오류: {{ error }}
+      <div style="color:#9ca3af; font-size:0.85rem; margin-top:0.3rem;">
+        {% if error == 'encoding' %}UTF-8(.txt)로 저장한 파일을 업로드해줘.{% endif %}
+        {% if error == 'empty' %}빈 파일이야.{% endif %}
+        {% if error == 'toolarge' %}파일이 너무 커(5MB 제한).{% endif %}
+        {% if error == 'invalid_pack' %}버전 형식이 올바르지 않아(YYYY-MM).{% endif %}
+        {% if error == 'pack_upload' %}업로드에 실패했어.{% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220; margin-top:1rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+      <div style="font-weight:700;">TXT 업로드 (덮어쓰기)</div>
+      <div style="color:#9ca3af; font-size:0.85rem;">권장: UTF-8 / 1줄 1단어 / 중복 자동 제거</div>
+    </div>
+    <form action="/admin/wordlists/packs/upload_one" method="post" enctype="multipart/form-data" style="margin-top:0.7rem;">
+      <input type="hidden" name="dict_version" value="{{ dict_version }}" />
+      <input type="hidden" name="list_name" value="{{ list_name }}" />
+      <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+        <input type="file" name="file" accept=".txt,text/plain" required style="color:#e5e7eb;" />
+        <button type="submit" class="btn btn-primary">업로드</button>
+      </div>
+    </form>
+  </div>
+
+  <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220; margin-top:1rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+      <div style="font-weight:700;">프리뷰 (최대 400줄)</div>
+      <div style="color:#9ca3af; font-size:0.85rem;">보기/다운로드는 원본 TXT를 그대로 보여줘.</div>
+    </div>
+    <pre style="white-space:pre-wrap; margin:0.8rem 0 0 0; padding:0.8rem; border-radius:0.6rem; border:1px solid #1f2937; background:#070d18; max-height:420px; overflow:auto; color:#e5e7eb;">{{ preview }}</pre>
+  </div>
+{% endblock %}
