@@ -63,15 +63,33 @@ curl -s "{{ base_url }}/api/bluewar/wordlists/meta" | jq
 
   <h3 style="margin-top:16px;">엔드포인트</h3>
   <ul>
-    <li><code>{{ base_url }}/api/bluewar/matches</code> (헤더 <code>X-API-Token</code>)</li>
+    <li><code>{{ base_url }}/bluewar/matches</code> (헤더 <code>X-API-Token</code>)</li>
+    <li><code>{{ base_url }}/api/bluewar/matches</code> (호환용 별칭, 동일 동작)</li>
   </ul>
 
   <details style="margin-top:14px;">
     <summary>cURL 예시</summary>
-    <pre><code>curl -s -X POST "{{ base_url }}/api/bluewar/matches" \
+    <pre><code>curl -s -X POST "{{ base_url }}/bluewar/matches" \
   -H "Content-Type: application/json" \
   -H "X-API-Token: {{ api_token }}" \
-  -d '{"mode":"pvp","status":"test","starter":"a","winner":"a","loser":"b","win_gap":1,"total_rounds":1,"started_at":0,"finished_at":0,"participants":[]}'
+  -d '{
+    "mode":"pvp",
+    "status":"finished",
+    "source_app":"shiho",
+    "starter_discord_id":"111111111111111111",
+    "winner_discord_id":"111111111111111111",
+    "loser_discord_id":"222222222222222222",
+    "win_gap":3,
+    "total_rounds":12,
+    "started_at":"2026-01-03T12:00:00",
+    "finished_at":"2026-01-03T12:05:00",
+    "note":"game_no=123",
+    "review_log":"블루아카이브 → 브로콜리 → ...",
+    "participants":[
+      {"discord_id":"111111111111111111","name":"A","side":1,"is_winner":true},
+      {"discord_id":"222222222222222222","name":"B","side":2,"is_winner":false}
+    ]
+  }'
 </code></pre>
   </details>
 </div>
