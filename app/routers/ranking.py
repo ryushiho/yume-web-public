@@ -242,7 +242,8 @@ def ranking_page(
     - 화면에서는 PVP만 제공한다.
     - 0전(총 전적이 0) 유저는 항상 맨 아래로 보낸다.
     """
-    ranked = compute_ranking_rows(db, limit=limit, source_app=source_app, mode="pvp")
+    mode = "pvp"
+    ranked = compute_ranking_rows(db, limit=limit, source_app=source_app, mode=mode)
 
     return templates.TemplateResponse(
         "ranking.html",
