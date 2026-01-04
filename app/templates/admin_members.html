@@ -5,9 +5,7 @@
 {% block content %}
 <div class="card">
   <h2 style="margin-top:0;">회원 목록</h2>
-  <p style="color:#9ca3af;">회원 계정에 관리자 권한을 부여/회수할 수 있어.</p>
-
-  <form method="post" action="/admin/members/set-admin" class="filters" style="margin: 1rem 0;">
+<form method="post" action="/admin/members/set-admin" class="filters" style="margin: 1rem 0;">
     <div class="field grow">
       <div class="label">회원 아이디</div>
       <input name="login_id" placeholder="회원 아이디(로그인 아이디)" required>

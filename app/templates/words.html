@@ -5,11 +5,6 @@
 
 {% block content %}
 <h1>단어 보기</h1>
-
-<p style="color:#9ca3af; margin-bottom:0.9rem;">
-    누구나 <strong>보기/검색</strong>만 가능합니다. (추가/수정/삭제는 관리자 전용)
-</p>
-
 {% if packs_tabs and packs_tabs|length > 0 %}
   <div style="display:flex; gap:0.35rem; flex-wrap:wrap; margin-bottom:0.85rem;">
     {% for t in packs_tabs %}
