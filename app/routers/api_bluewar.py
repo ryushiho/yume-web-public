@@ -25,23 +25,30 @@ api_router = APIRouter(prefix="/api/bluewar", tags=["bluewar_api"])
 #   인증 (봇 → 관리자 웹)
 # ============================
 def get_expected_api_token() -> Optional[str]:
-    """
-    config.settings 에서 API 토큰 값을 가져온다.
-    - YUME_API_TOKEN 또는 API_TOKEN 중 하나를 사용.
-    - 둘 다 없으면 토큰 검증을 하지 않는다(=개발용 오픈 상태).
-    """
-    return getattr(settings, "API_TOKEN", None)
-
+    expected = (getattr(settings, "API_TOKEN", None) or "").strip()
+    return expected or None
 
 async def verify_api_token(
-    x_api_token: Optional[str] = Header(None, alias="X-API-Token")
+    x_api_token: Optional[str] = Header(default=None, alias="X-API-Token"),
+    x_yume_api_token: Optional[str] = Header(default=None, alias="X-Yume-Api-Token"),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ) -> None:
     expected = get_expected_api_token()
     if expected is None:
-        # 설정 안 돼 있으면 검증 생략 (개발용)
         return
 
-    if not x_api_token or x_api_token != expected:
+    token = (x_api_token or x_yume_api_token or "").strip()
+    if not token and authorization:
+        auth = authorization.strip()
+        if auth.lower().startswith("bearer "):
+            token = auth.split(None, 1)[1].strip()
+
+    allowed = {expected}
+    wordlist_token = (getattr(settings, "WORDLIST_TOKEN", None) or "").strip()
+    if wordlist_token:
+        allowed.add(wordlist_token)
+
+    if (not token) or (token not in allowed):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API token",
