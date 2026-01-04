@@ -15,7 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
 
 from config import settings
-from app.routers import auth, dashboard, users, api_bluewar, ranking, bluewar, home, member, admin_members, aby, api_aby
+from app.routers import auth, dashboard, users, api_bluewar, ranking, bluewar, home, member, admin_members, aby, api_aby, api_ranking
 from app.routers import admin_wordlists
 from app.routers import admin_integration
 from app.routers import api_wordlists
@@ -64,7 +64,6 @@ async def require_login_for_ui(request: Request, call_next):
         path.startswith("/static")
         or path.startswith("/api")
         or path.startswith("/bluewar")
-        or path.startswith("/words")
         or path.startswith("/favicon")
         or path.startswith("/robots.txt")
     ):
@@ -108,6 +107,7 @@ app.include_router(aby.router)
 app.include_router(users.router)
 app.include_router(api_bluewar.router)
 app.include_router(api_bluewar.api_router)
+app.include_router(api_ranking.router)
 app.include_router(api_aby.router)
 app.include_router(api_wordlists.router)
 app.include_router(ranking.router)

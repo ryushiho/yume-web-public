@@ -87,11 +87,40 @@ async def user_detail(
     admin=Depends(get_current_admin_user),
 ):
     user = get_user_or_404(db, user_id)
+
+    did = str(getattr(user, "discord_id", "") or "")
+    matches_q = db.query(models.BlueWarMatch).filter(
+        (models.BlueWarMatch.winner_discord_id == did) | (models.BlueWarMatch.loser_discord_id == did)
+    )
+    matches = matches_q.order_by(models.BlueWarMatch.id.desc()).limit(50).all()
+
+    match_rows = []
+    for m in matches:
+        try:
+            if did and m.winner_discord_id == did:
+                result = "승"
+            elif did and m.loser_discord_id == did:
+                result = "패"
+            else:
+                result = "-"
+        except Exception:
+            result = "-"
+        match_rows.append(
+            {
+                "id": int(getattr(m, "id", 0) or 0),
+                "mode": str(getattr(m, "mode", "") or ""),
+                "started_at": getattr(m, "started_at", None),
+                "finished_at": getattr(m, "finished_at", None),
+                "result": result,
+            }
+        )
+
     return templates.TemplateResponse(
         "user_detail.html",
         {
             "request": request,
             "user": user,
+            "matches": match_rows,
         },
     )
 

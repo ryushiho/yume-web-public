@@ -86,10 +86,21 @@
         </tr>
         </thead>
         <tbody>
-        {# 아직 매치 테이블은 안 붙였으니, 일단 안내 메시지만 표시 #}
+        {% if matches is defined and matches and (matches|length) > 0 %}
+        {% for m in matches %}
+        <tr>
+            <td><a href="/bluewar/matches/{{ m.id }}">{{ m.id }}</a></td>
+            <td>{{ m.mode }}</td>
+            <td>{% if m.started_at %}{{ m.started_at.strftime("%Y-%m-%d %H:%M") }}{% else %}-{% endif %}</td>
+            <td>{% if m.finished_at %}{{ m.finished_at.strftime("%Y-%m-%d %H:%M") }}{% else %}-{% endif %}</td>
+            <td>{{ m.result }}</td>
+        </tr>
+        {% endfor %}
+        {% else %}
         <tr>
             <td colspan="5">아직 전적이 없습니다.</td>
         </tr>
+        {% endif %}
         </tbody>
     </table>
 </section>

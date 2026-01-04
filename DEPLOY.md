@@ -67,7 +67,7 @@
   - `/openapi.json`
 
 주의:
-- `POST /api/bluewar/matches` 는 `/bluewar/matches` 의 **호환용 별칭**(둘 다 동작).
+- `POST /api/bluewar/matches` 는 **404**가 정상(해당 경로 없음).
 - 루트 `/`는 FastAPI 기본 라우팅에 따라 `307/405` 같은 응답이 나올 수 있음(루트에 GET 핸들러가 없으면 405 가능).
 
 ---

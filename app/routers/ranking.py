@@ -61,27 +61,23 @@ def _resolve_display_name(
     return discord_id
 
 
-@router.get("/", response_class=HTMLResponse)
-def ranking_page(
-    request: Request,
-    db: Session = Depends(get_db),
-    _viewer=Depends(get_current_member_or_admin),
+
+def compute_ranking_rows(
+    db: Session,
+    *,
     limit: int = 50,
     source_app: str = "shiho",
-):
-    """블루전 랭킹.
+    mode: str = "pvp",
+) -> List[RankingRow]:
+    """랭킹 계산(웹/봇 공용).
 
     정렬 기준:
     1) 승차(총 승 - 총 패) DESC
     2) 총 승리(기본 전적 포함) DESC
     3) 총 전적(기본 전적 포함) DESC
-
-    주의:
-    - 화면에서는 PVP만 제공한다.
-    - 0전(총 전적이 0) 유저는 항상 맨 아래로 보낸다.
+    4) 이름 ASC (동률 안정화)
     """
-
-    mode = "pvp"
+    mode = (mode or "pvp").strip().lower()
 
     q = db.query(models.BlueWarMatch)
 
@@ -93,12 +89,12 @@ def ranking_page(
     q = q.filter(models.BlueWarMatch.winner_discord_id.isnot(None))
     q = q.filter(models.BlueWarMatch.loser_discord_id.isnot(None))
 
-    # ✅ PVP만 집계
+    # ✅ mode만 집계 (기본: pvp)
     q = q.filter(models.BlueWarMatch.mode == mode)
 
     matches_all: List[models.BlueWarMatch] = q.order_by(models.BlueWarMatch.id.desc()).all()
 
-    # 방어: 혹시라도 PVP로 잘못 기록된 내부 계정 매치가 섞여 있으면 랭킹에서 통째로 제외한다.
+    # 방어: 혹시라도 내부 계정 매치가 섞여 있으면 랭킹에서 통째로 제외한다.
     matches: List[models.BlueWarMatch] = []
     for m in matches_all:
         if _is_excluded_discord_id(m.winner_discord_id) or _is_excluded_discord_id(m.loser_discord_id):
@@ -115,15 +111,14 @@ def ranking_page(
             ids_from_matches.add(m.loser_discord_id)
 
     # ✅ 랭킹은 "유저 테이블"도 같이 집계해야 한다.
-    # - blue_records.json(기본 전적)만 있어도 랭킹이 떠야 함
-    users: List[models.User] = [u for u in db.query(models.User).all() if not _is_excluded_discord_id(u.discord_id)]
-    users_by_discord: Dict[str, models.User] = {u.discord_id: u for u in users}
-    ids_from_users: Set[str] = set(users_by_discord.keys())
+    users: List[models.User] = [
+        u for u in db.query(models.User).all()
+        if (u.discord_id and (not _is_excluded_discord_id(u.discord_id)))
+    ]
 
-    # 최종 집계 대상: (유저 테이블 + 매치에서 등장한 디스코드 ID)
-    ids: Set[str] = set(ids_from_users) | set(ids_from_matches)
+    users_by_discord: Dict[str, models.User] = {u.discord_id: u for u in users if u.discord_id}
 
-    # 최종 방어: 제외 대상은 완전히 제거
+    ids: Set[str] = set(ids_from_matches) | set(users_by_discord.keys())
     ids = {did for did in ids if not _is_excluded_discord_id(did)}
 
     fallback_names_by_discord: Dict[str, str] = {}
@@ -140,29 +135,30 @@ def ranking_page(
     # stats keyed by discord_id
     stats: Dict[str, Dict[str, int]] = {}
     for did in ids:
-        u = users_by_discord.get(did)
-        stats[did] = {
-            "wins": 0,
-            "losses": 0,
-            "base_wins": int(u.base_wins) if u else 0,
-            "base_losses": int(u.base_losses) if u else 0,
-        }
+        stats[did] = {"wins": 0, "losses": 0, "base_wins": 0, "base_losses": 0}
 
+    # matches wins/losses
     for m in matches:
         if m.winner_discord_id:
-            s = stats.setdefault(
-                m.winner_discord_id,
-                {"wins": 0, "losses": 0, "base_wins": 0, "base_losses": 0},
-            )
-            s["wins"] += 1
-
+            stats.setdefault(m.winner_discord_id, {"wins": 0, "losses": 0, "base_wins": 0, "base_losses": 0})
+            stats[m.winner_discord_id]["wins"] += 1
         if m.loser_discord_id:
-            s = stats.setdefault(
-                m.loser_discord_id,
-                {"wins": 0, "losses": 0, "base_wins": 0, "base_losses": 0},
-            )
-            s["losses"] += 1
+            stats.setdefault(m.loser_discord_id, {"wins": 0, "losses": 0, "base_wins": 0, "base_losses": 0})
+            stats[m.loser_discord_id]["losses"] += 1
 
+    # base stats from users table
+    for did, u in users_by_discord.items():
+        stats.setdefault(did, {"wins": 0, "losses": 0, "base_wins": 0, "base_losses": 0})
+        try:
+            stats[did]["base_wins"] = int(getattr(u, "base_wins", 0) or 0)
+        except Exception:
+            stats[did]["base_wins"] = 0
+        try:
+            stats[did]["base_losses"] = int(getattr(u, "base_losses", 0) or 0)
+        except Exception:
+            stats[did]["base_losses"] = 0
+
+    # build rows
     rows: List[RankingRow] = []
     for did, s in stats.items():
         wins = int(s.get("wins", 0))
@@ -177,7 +173,6 @@ def ranking_page(
         total_battles = total_wins + total_losses
 
         net = total_wins - total_losses
-
         win_rate = (total_wins / total_battles * 100.0) if total_battles > 0 else 0.0
 
         rows.append(
@@ -202,26 +197,52 @@ def ranking_page(
             }
         )
 
-    # ✅ 정렬:
-    # - 0전(총 전적 0) 유저는 무조건 맨 아래
-    # - 그 외에는 승차(net) DESC → 총 승 DESC → 총 매치 DESC → 이름
-    rows.sort(
-        key=lambda r: (
-            1 if (r["total_wins"] + r["total_losses"]) == 0 else 0,
-            -r["net"],
-            -r["total_wins"],
-            -(r["total_wins"] + r["total_losses"]),
-            r["name"],
+    # 정렬: 승차 -> 총승 -> 총전적 -> 이름
+    # 0전(total_battles=0)은 맨 아래로
+    def _sort_key(r: RankingRow):
+        total_battles = int(r.get("total_wins", 0)) + int(r.get("total_losses", 0))
+        if total_battles <= 0:
+            return (1, 0, 0, 0, r.get("name", ""))
+        return (
+            0,
+            -int(r.get("net", 0)),
+            -int(r.get("total_wins", 0)),
+            -total_battles,
+            r.get("name", ""),
         )
-    )
 
-    # rank 부여 + limit 적용
+    rows.sort(key=_sort_key)
+
     limit_i = max(1, min(int(limit), 200))
     ranked: List[RankingRow] = []
     for idx, r in enumerate(rows[:limit_i], start=1):
         r2 = dict(r)
         r2["rank"] = idx
         ranked.append(r2)  # type: ignore[arg-type]
+
+    return ranked
+
+
+@router.get("/", response_class=HTMLResponse)
+def ranking_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    _viewer=Depends(get_current_member_or_admin),
+    limit: int = 50,
+    source_app: str = "shiho",
+):
+    """블루전 랭킹.
+
+    정렬 기준:
+    1) 승차(총 승 - 총 패) DESC
+    2) 총 승리(기본 전적 포함) DESC
+    3) 총 전적(기본 전적 포함) DESC
+
+    주의:
+    - 화면에서는 PVP만 제공한다.
+    - 0전(총 전적이 0) 유저는 항상 맨 아래로 보낸다.
+    """
+    ranked = compute_ranking_rows(db, limit=limit, source_app=source_app, mode="pvp")
 
     return templates.TemplateResponse(
         "ranking.html",

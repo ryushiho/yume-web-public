@@ -22,6 +22,19 @@ class Settings:
         #   예) YUME_WORDLIST_TOKEN="<랜덤 긴 문자열>"
         self.WORDLIST_TOKEN: str = os.getenv("YUME_WORDLIST_TOKEN", "")
 
+        # 디스코드 봇 전적 업로드/랭킹 조회 API 토큰 (선택)
+        # - 지정 시: X-API-Token 헤더로 검증한다.
+        # - 미지정 시: 개발 편의를 위해 API를 오픈 상태로 둔다.
+        _api = (
+            os.getenv("YUME_API_TOKEN")
+            or os.getenv("YUME_ADMIN_API_TOKEN")
+            or os.getenv("SHIHO_ADMIN_API_TOKEN")
+            or os.getenv("ADMIN_API_TOKEN")
+            or os.getenv("API_TOKEN")
+        )
+        self.API_TOKEN = (_api.strip() if isinstance(_api, str) else "") or None
+
+
         # 월별(버전) 단어 DB 팩 저장 경로 (선택)
         # - 미지정 시: <project_root>/data/wordlists/bluewar
         # - 지정 시: 절대/상대 경로 모두 허용(상대는 project_root 기준)
