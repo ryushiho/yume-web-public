@@ -7,8 +7,8 @@
   <h2 style="margin-top:0;">회원 목록</h2>
 <form method="post" action="/admin/members/set-admin" class="filters" style="margin: 1rem 0;">
     <div class="field grow">
-      <div class="label">회원 아이디</div>
-      <input name="login_id" placeholder="회원 아이디(로그인 아이디)" required>
+      <div class="label">Discord ID</div>
+      <input name="login_id" placeholder="Discord ID (snowflake)" required>
     </div>
     <div class="field">
       <div class="label">권한</div>
@@ -19,7 +19,24 @@
     </div>
 
     <button type="submit" class="btn btn-primary">적용</button>
-  </form>
+  
+</form>
+
+<form method="post" action="/admin/members/set-nickname" class="filters" style="margin: 0 0 1.25rem 0;">
+  <div class="field grow">
+    <div class="label">Discord ID</div>
+    <input name="discord_id" placeholder="Discord ID (snowflake)" required>
+  </div>
+  <div class="field grow">
+    <div class="label">강제 닉네임</div>
+    <input name="nickname" placeholder="새 닉네임" required>
+  </div>
+  <div class="field">
+    <div class="label">&nbsp;</div>
+    <button type="submit" class="btn btn-primary">닉네임 강제 변경</button>
+  </div>
+</form>
+
 
   <table class="table">
     <thead>

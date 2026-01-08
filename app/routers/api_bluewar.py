@@ -150,7 +150,7 @@ async def create_match(
     for p in data.participants:
         # discord_id 가 있으면 users 테이블 upsert + 연결
         user_obj = None
-        if p.discord_id:
+        if p.discord_id and str(p.discord_id).isdigit():
             user_obj = (
                 db.query(models.User)
                 .filter(models.User.discord_id == p.discord_id)
@@ -183,6 +183,42 @@ async def create_match(
             turns=p.turns,
         )
         db.add(participant)
+
+
+    # ensure winner/loser are also present as participants (bots may be omitted by sender)
+    try:
+        seen = {str(p.discord_id).strip().lower() for p in data.participants if p.discord_id}
+        def _maybe_add(did: Optional[str], is_winner: bool):
+            if not did:
+                return
+            key = str(did).strip().lower()
+            if key in seen:
+                return
+            # bot-friendly ai_name
+            ai_name = None
+            if key == "shiho":
+                ai_name = "시호시호"
+            elif key == "yume":
+                ai_name = "유메"
+            participant = models.BlueWarParticipant(
+                match=match,
+                user=None,
+                discord_id=did,
+                name=None,
+                ai_name=ai_name,
+                side="BOT" if ai_name else "-",
+                is_winner=bool(is_winner),
+                score=None,
+                turns=None,
+            )
+            db.add(participant)
+            seen.add(key)
+
+        _maybe_add(data.winner_discord_id, True)
+        _maybe_add(data.loser_discord_id, False)
+    except Exception:
+        # ingestion must not fail because of this
+        pass
 
     db.commit()
     db.refresh(match)

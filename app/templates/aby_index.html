@@ -28,7 +28,7 @@
                     <a href="/aby/guild/{{ g.guild_id }}" style="text-decoration:none;">
                         {{ g.guild_name or g.guild_id }}
                     </a>
-                    <div style="font-size:0.8rem; color:#94a3b8;">ID: {{ g.guild_id }}</div>
+                    {% if g.guild_name %}<div style="font-size:0.8rem; color:#94a3b8;">ID: {{ g.guild_id }}</div>{% endif %}
                 </td>
                 <td><strong>{{ "{:,}".format(g.debt or 0) }}</strong></td>
                 <td>{{ "{:.4f}".format(g.interest_rate or 0.0) }}</td>

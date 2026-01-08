@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}내 정보{% endblock %}
+{% block header_title %}내 정보{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:640px;">
+  <h2 style="margin-top:0;">내 정보</h2>
+
+  {% if message %}
+    <div class="alert success" style="margin:0 0 1rem 0;">{{ message }}</div>
+  {% endif %}
+  {% if error %}
+    <div class="alert danger" style="margin:0 0 1rem 0;">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/auth/profile">
+    <div class="field" style="margin-bottom:0.9rem;">
+      <div class="label">아이디(표시명)</div>
+      <input name="username" value="{{ admin.username }}" required>
+    </div>
+
+    <div class="field" style="margin-bottom:0.9rem;">
+      <div class="label">현재 비밀번호</div>
+      <input type="password" name="current_password" autocomplete="current-password" required>
+    </div>
+
+    <div class="field" style="margin-bottom:0.35rem;">
+      <div class="label">새 비밀번호(선택)</div>
+      <input type="password" name="new_password" autocomplete="new-password">
+    </div>
+    <div class="muted" style="font-size:12px; margin-bottom:0.9rem;">비밀번호를 바꾸지 않으려면 비워 둬.</div>
+
+    <div class="field" style="margin-bottom:1.0rem;">
+      <div class="label">새 비밀번호 확인</div>
+      <input type="password" name="new_password_confirm" autocomplete="new-password">
+    </div>
+
+    <button class="btn btn-primary" type="submit">저장</button>
+  </form>
+</div>
+{% endblock %}

@@ -10,6 +10,18 @@ from app.dependencies import get_db, get_current_admin_user
 from app.models import User, BlueWarMatch
 from app.utils.time import fmt_kst
 
+
+def _status_label(s: str) -> str:
+    v = (s or "").strip().lower()
+    if v == "finished":
+        return "종료"
+    if v == "running":
+        return "진행중"
+    if v == "aborted":
+        return "중단"
+    return s or "-"
+
+
 router = APIRouter(
     prefix="/dashboard",
     tags=["dashboard"],
@@ -82,7 +94,7 @@ def dashboard(
                 "id": m.id,
                 "display_id": f"#{disp}",
                 "mode_label": mode_label(m.mode),
-                "status": m.status,
+                "status_label": _status_label(m.status),
                 "win_gap": m.win_gap,
                 "total_rounds": m.total_rounds,
                 "started_at": fmt_kst(m.started_at, "%Y-%m-%d %H:%M:%S"),

@@ -40,3 +40,21 @@ def set_admin(
         target.is_admin = (make_admin == "1")
         db.commit()
     return RedirectResponse(url="/admin/members/", status_code=303)
+
+
+@router.post("/set-nickname")
+def set_member_nickname(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin_user),
+    discord_id: str = Form(...),
+    nickname: str = Form(...),
+):
+    discord_id = (discord_id or "").strip()
+    nickname = (nickname or "").strip()
+    if discord_id and nickname:
+        target = db.query(models.MemberUser).filter(models.MemberUser.discord_id == discord_id).first()
+        if target:
+            target.nickname = nickname
+            db.commit()
+    return RedirectResponse(url="/admin/members/", status_code=303)

@@ -12,7 +12,7 @@
         <div class="muted" style="font-size:12px; margin-bottom:4px;">길드</div>
         <select id="aby-guild" class="input" style="min-width: 260px;">
           {% for g in guilds %}
-            <option value="{{ g.guild_id }}" {% if selected_guild_id == (g.guild_id|string) %}selected{% endif %}>{{ g.guild_id }}</option>
+            <option value="{{ g.guild_id }}" {% if selected_guild_id == (g.guild_id|string) %}selected{% endif %}>{{ g.guild_name or g.guild_id }}</option>
           {% endfor %}
         </select>
       </div>

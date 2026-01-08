@@ -10,6 +10,30 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_current_member_or_admin
 from app import models
 from app.utils.time import fmt_kst
+
+
+BOT_NAME_MAP = {
+    "shiho": "시호시호",
+    "yume": "유메",
+}
+
+
+def _source_label(v: str) -> str:
+    s = (v or "").strip()
+    key = s.lower()
+    return BOT_NAME_MAP.get(key, s or "-")
+
+
+def _status_label(s: str) -> str:
+    v = (s or "").strip().lower()
+    if v == "finished":
+        return "종료"
+    if v == "running":
+        return "진행중"
+    if v == "aborted":
+        return "중단"
+    return s or "-"
+
 router = APIRouter(
     prefix="/bluewar",
     tags=["bluewar"],
@@ -23,8 +47,9 @@ def _resolve_display_name(
 ) -> str:
     if not discord_id:
         return "-"
-    if str(discord_id).strip().lower() == "yume":
-        return "유메"
+    key = str(discord_id).strip().lower()
+    if key in BOT_NAME_MAP:
+        return BOT_NAME_MAP[key]
     u = users_by_discord.get(discord_id)
     if u and u.nickname:
         return u.nickname
@@ -184,7 +209,9 @@ def list_bluewar_matches(
                 "mode": match.mode,
                 "mode_label": _mode_label(match.mode),
                 "source_app": getattr(match, "source_app", None) or "-",
+                "source_label": _source_label(getattr(match, "source_app", None) or "-"),
                 "status": match.status,
+                "status_label": _status_label(match.status),
                 "starter": _resolve_display_name(
                     discord_id=match.starter_discord_id,
                     users_by_discord=users_by_discord,
@@ -290,10 +317,19 @@ def bluewar_match_detail(
         if p.discord_id and p.discord_id in users_by_discord and users_by_discord[p.discord_id].nickname:
             return users_by_discord[p.discord_id].nickname
         if p.name:
+            key = str(p.name).strip().lower()
+            if key in BOT_NAME_MAP:
+                return BOT_NAME_MAP[key]
             return p.name
         if p.ai_name:
+            key = str(p.ai_name).strip().lower()
+            if key in BOT_NAME_MAP:
+                return BOT_NAME_MAP[key]
             return p.ai_name
         if p.discord_id:
+            key = str(p.discord_id).strip().lower()
+            if key in BOT_NAME_MAP:
+                return BOT_NAME_MAP[key]
             return p.discord_id
         return "-"
     view_parts = []
@@ -307,6 +343,33 @@ def bluewar_match_detail(
                 "turns": p.turns,
             }
         )
+
+    # ensure winner/loser appear in participants view (legacy records may not store bot as participant)
+    existing_names = {vp.get("name") for vp in view_parts if vp.get("name")}
+    existing_ids = {str(p.discord_id).strip().lower() for p in participants if p.discord_id}
+    def _append_virtual(discord_id: Optional[str], is_winner: bool):
+        if not discord_id:
+            return
+        key = str(discord_id).strip().lower()
+        disp = BOT_NAME_MAP.get(key) or str(discord_id)
+        # avoid duplicates
+        if disp in existing_names:
+            return
+        if key in existing_ids:
+            return
+        view_parts.append(
+            {
+                "side": "BOT" if key in BOT_NAME_MAP else "-",
+                "name": disp,
+                "is_winner": bool(is_winner),
+                "score": None,
+                "turns": None,
+            }
+        )
+
+    _append_virtual(match.winner_discord_id, True)
+    _append_virtual(match.loser_discord_id, False)
+
     is_admin = request.session.get("user") is not None
     return templates.TemplateResponse(
         "bluewar/match_detail.html",
@@ -317,6 +380,8 @@ def bluewar_match_detail(
             "is_admin": is_admin,
             "display_id": display_id,
             "mode_label": mode_label,
+            "source_label": _source_label(getattr(match, "source_app", None) or "-"),
+            "status_label": _status_label(match.status),
             "started_at": fmt_kst(match.started_at, "%Y-%m-%d %H:%M:%S"),
             "finished_at": fmt_kst(match.finished_at, "%Y-%m-%d %H:%M:%S"),
             "error": None,

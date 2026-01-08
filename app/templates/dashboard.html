@@ -29,8 +29,7 @@
             <th>ID</th>
             <th>모드</th>
             <th>상태</th>
-            <th>승차</th>
-            <th>턴 수</th>
+                        <th>턴 수</th>
             <th>시작 시각</th>
             <th>상세</th>
         </tr>
@@ -40,9 +39,8 @@
         <tr>
             <td>{{ m.display_id }}</td>
             <td>{{ m.mode_label }}</td>
-            <td>{{ m.status }}</td>
-            <td>{{ m.win_gap is not none and m.win_gap or "-" }}</td>
-            <td>{{ m.total_rounds is not none and m.total_rounds or "-" }}</td>
+            <td>{{ m.status_label }}</td>
+                        <td>{{ m.total_rounds is not none and m.total_rounds or "-" }}</td>
             <td>{{ m.started_at or "-" }}</td>
             <td>
                 <a href="/bluewar/matches/{{ m.id }}" class="btn btn-primary btn-sm">전적 보기</a>
@@ -50,7 +48,7 @@
         </tr>
         {% else %}
         <tr>
-            <td colspan="7" class="text-center">
+            <td colspan="6" class="text-center">
                 아직 기록된 매치가 없습니다.
             </td>
         </tr>

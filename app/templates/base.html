@@ -315,9 +315,7 @@
                              admin_user.id if admin_user.id is defined and admin_user.id else
                              "관리자")
                         %}
-                        <span style="font-size:0.85rem; color:#9ca3af; margin-right:0.5rem;">
-                            {{ display_name }} 님
-                        </span>
+                        <a href="/auth/profile" style="font-size:0.85rem; color:#9ca3af; margin-right:0.5rem; text-decoration:none;">{{ display_name }} 님</a>
                         <a href="/auth/logout">로그아웃</a>
                     {% elif is_member %}
                         {% set display_name =
