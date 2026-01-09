@@ -57,6 +57,12 @@ class Settings:
         # - 지정하지 않으면: default_version.txt -> 최신 버전 순
         self.WORDLIST_PACKS_DEFAULT: str = os.getenv("YUME_WORDLIST_PACKS_DEFAULT", "").strip()
 
+        # 블루전(루트전) 분석 캐시 저장 경로 (선택)
+        # - 미지정 시: <project_root>/data/bluewar_analysis_cache
+        # - data/ 디렉토리는 yumeweb deploy 파이프라인에서 safe-exclude 되므로
+        #   서버에서 캐시가 유지된다.
+        self.BLUEWAR_ANALYSIS_CACHE_DIR: str = os.getenv("YUME_BLUEWAR_ANALYSIS_CACHE_DIR", "").strip()
+
 
 # FastAPI 전체에서 쓰는 전역 설정 인스턴스
 settings = Settings()

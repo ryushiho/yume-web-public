@@ -59,6 +59,46 @@ def enqueue_rebuild_job(
             db.rollback()
             return existing
 
+    # If DB already has the computed rows for this analysis_key, we don't need to spawn a thread.
+    # We still record a job row for auditability in the admin UI.
+    try:
+        m = (
+            db.query(models.BlueWarAnalysisMeta)
+            .filter(models.BlueWarAnalysisMeta.analysis_key == meta.analysis_key)
+            .first()
+        )
+        if m and (m.words_sha256 == meta.words_sha256) and (m.dooum_sha256 == meta.dooum_sha256):
+            wcnt = (
+                db.query(models.BlueWarWordStat)
+                .filter(models.BlueWarWordStat.analysis_key == meta.analysis_key)
+                .count()
+            )
+            scnt = (
+                db.query(models.BlueWarSyllableStat)
+                .filter(models.BlueWarSyllableStat.analysis_key == meta.analysis_key)
+                .count()
+            )
+            if int(wcnt) == int(meta.word_count) and int(scnt) > 0:
+                now = datetime.utcnow()
+                job = models.BlueWarAnalysisJob(
+                    analysis_key=meta.analysis_key,
+                    list_name=meta.list_name,
+                    pack_version=meta.pack_version,
+                    status=JOB_DONE,
+                    progress_current=1,
+                    progress_total=1,
+                    message="cache hit (db)",
+                    created_at=now,
+                    started_at=now,
+                    finished_at=now,
+                )
+                db.add(job)
+                db.commit()
+                db.refresh(job)
+                return job
+    except Exception:
+        db.rollback()
+
     job = models.BlueWarAnalysisJob(
         analysis_key=meta.analysis_key,
         list_name=meta.list_name,

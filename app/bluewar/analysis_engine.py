@@ -13,6 +13,7 @@ from app import models
 from app.utils import dictpacks
 from app.config import settings
 from .dooum import allowed_first_chars, dooum_signature
+from . import analysis_cache
 
 
 ALGO_VERSION = "syllable-retrograde-v1"
@@ -273,6 +274,27 @@ def get_computed_graph(*, analysis_key: str, words: List[str]) -> ComputedGraph:
     if g:
         return g
 
+    # Try persistent graph cache (survives restarts)
+    try:
+        payload = analysis_cache.load_graph(analysis_key)
+        if payload:
+            gg = ComputedGraph(
+                analysis_key=analysis_key,
+                status=payload.get("status") or {},
+                out_moves=payload.get("out_moves") or {},
+                in_moves=payload.get("in_moves") or {},
+                moves=payload.get("moves") or {},
+                pred_edges=payload.get("pred_edges") or {},
+                mate_dist=payload.get("mate_dist") or {},
+                win_witness=payload.get("win_witness") or {},
+                lose_best=payload.get("lose_best") or {},
+            )
+            _cache_put(analysis_key, gg)
+            return gg
+    except Exception:
+        # best-effort
+        pass
+
     status, out_moves, in_moves, moves, preds, pred_edges, win_witness, lose_best, dist = _retrograde_proof(words)
     g = ComputedGraph(
         analysis_key=analysis_key,
@@ -286,6 +308,25 @@ def get_computed_graph(*, analysis_key: str, words: List[str]) -> ComputedGraph:
         lose_best=lose_best,
     )
     _cache_put(analysis_key, g)
+
+    # Best-effort persistent cache
+    try:
+        analysis_cache.save_graph(
+            analysis_key,
+            {
+                "analysis_key": analysis_key,
+                "status": status,
+                "out_moves": out_moves,
+                "in_moves": in_moves,
+                "moves": moves,
+                "pred_edges": pred_edges,
+                "mate_dist": dist,
+                "win_witness": win_witness,
+                "lose_best": lose_best,
+            },
+        )
+    except Exception:
+        pass
     return g
 
 
@@ -325,33 +366,35 @@ def _retrograde_proof(
         firsts.add(f)
         lasts.add(l)
 
-    nodes: set[str] = set(firsts) | set(lasts)
-    moves: Dict[str, List[Tuple[str, str]]] = {n: [] for n in nodes}
-    preds: Dict[str, List[str]] = {n: [] for n in nodes}
-    pred_edges: Dict[str, List[Tuple[str, str]]] = {n: [] for n in nodes}
-    out_moves: Dict[str, int] = {n: 0 for n in nodes}
-    in_moves: Dict[str, int] = {n: 0 for n in nodes}
+    # IMPORTANT: determinism
+    # - analysis_key is a cache key, so identical inputs must yield identical outputs.
+    # - Python set iteration order is not guaranteed across processes.
+    # - We therefore use a sorted node list and also sort the dooum-expanded candidates.
+    nodes_set: set[str] = set(firsts) | set(lasts)
+    nodes: List[str] = sorted(nodes_set)
+
+    moves: Dict[str, List[Tuple[str, str]]] = {n: [] for n in nodes_set}
+    preds: Dict[str, List[str]] = {n: [] for n in nodes_set}
+    pred_edges: Dict[str, List[Tuple[str, str]]] = {n: [] for n in nodes_set}
+    out_moves: Dict[str, int] = {n: 0 for n in nodes_set}
+    in_moves: Dict[str, int] = {n: 0 for n in nodes_set}
 
     # Build moves and predecessor lists (counting each word as one move)
     # NOTE: dooum is applied as "allowed first syllables" on the current syllable.
     #       That is consistent with Shiho's rule: 받침음절 X -> 두음 적용 가능한 시작음절(단방향)로도 시작 가능.
-    for u in list(nodes):
+    for u in nodes:
         allowed = allowed_first_chars(u)
         if not allowed:
             continue
-        for ch in allowed:
+        for ch in sorted(allowed):
             for w in words_by_first.get(ch, []):
                 v = _last_char(w)
                 if not v:
                     continue
-                if v not in nodes:
-                    # extremely rare; but be safe
-                    nodes.add(v)
-                    moves[v] = []
-                    preds[v] = []
-                    pred_edges[v] = []
-                    out_moves[v] = 0
-                    in_moves[v] = 0
+                if v not in nodes_set:
+                    # Should not happen because nodes_set includes all last syllables.
+                    # If it does, ignore this edge to keep analysis deterministic.
+                    continue
                 moves[u].append((w, v))
                 preds[v].append(u)
                 pred_edges[v].append((u, w))
@@ -360,7 +403,7 @@ def _retrograde_proof(
 
     # Retrograde
     status: Dict[str, str] = {}
-    remaining: Dict[str, int] = {n: int(out_moves.get(n, 0)) for n in nodes}
+    remaining: Dict[str, int] = {n: int(out_moves.get(n, 0)) for n in nodes_set}
 
     # mate_dist: number of plies to reach a terminal loss for the player who is to move,
     # under optimal play. For LOSE nodes, this is "time until you lose" (you want it large).
@@ -691,7 +734,10 @@ def rebuild_analysis(
 ) -> AnalysisInput:
     """Recompute and store analysis results.
 
-    This is safe to call multiple times; it overwrites rows for the same analysis_key.
+    Phase2: persistent cache
+      - If DB already contains the exact analysis_key (and row counts match), we return immediately.
+      - Else, if a filesystem cache exists under data/, we restore DB rows from it.
+      - Else, compute, store to DB, and also write filesystem cache.
     """
 
     meta, words = prepare_input(db, list_name=list_name, pack_version=pack_version)
@@ -704,12 +750,165 @@ def rebuild_analysis(
                 # Progress is best-effort; never break analysis.
                 pass
 
+    def _db_cache_ok() -> bool:
+        try:
+            m = (
+                db.query(models.BlueWarAnalysisMeta)
+                .filter(models.BlueWarAnalysisMeta.analysis_key == meta.analysis_key)
+                .first()
+            )
+            if not m:
+                return False
+            if (
+                (m.list_name != meta.list_name)
+                or (m.pack_version != meta.pack_version)
+                or (m.words_sha256 != meta.words_sha256)
+                or (int(m.word_count or 0) != int(meta.word_count))
+                or (m.dooum_sha256 != meta.dooum_sha256)
+                or (m.algo_version != meta.algo_version)
+            ):
+                return False
+            wcnt = (
+                db.query(models.BlueWarWordStat)
+                .filter(models.BlueWarWordStat.analysis_key == meta.analysis_key)
+                .count()
+            )
+            if int(wcnt) != int(meta.word_count):
+                return False
+            scnt = (
+                db.query(models.BlueWarSyllableStat)
+                .filter(models.BlueWarSyllableStat.analysis_key == meta.analysis_key)
+                .count()
+            )
+            return int(scnt) > 0
+        except Exception:
+            return False
+
+    # 0) DB cache hit: instant
+    if _db_cache_ok():
+        _progress(1, 1, "cache hit (db)")
+        return meta
+
     total_steps = 5
-    _progress(1, total_steps, "compute graph")
 
-    status, out_moves, in_moves, moves, _preds = _retrograde_syllables(words)
+    # 1) Try filesystem payload cache -> restore into DB
+    _progress(1, total_steps, "check cache")
+    payload = analysis_cache.load_payload(meta.analysis_key)
+    if payload:
+        pm = (payload.get("meta") or {})
+        if (
+            (pm.get("analysis_key") == meta.analysis_key)
+            and (pm.get("words_sha256") == meta.words_sha256)
+            and (pm.get("dooum_sha256") == meta.dooum_sha256)
+            and (pm.get("algo_version") == meta.algo_version)
+            and (pm.get("list_name") == meta.list_name)
+            and (pm.get("pack_version") == meta.pack_version)
+            and (int(pm.get("word_count") or 0) == int(meta.word_count))
+        ):
+            _progress(2, total_steps, "restore from cache")
 
-    _progress(2, total_steps, "delete old rows")
+            # Remove existing rows for this key (best-effort)
+            db.query(models.BlueWarSyllableStat).filter(
+                models.BlueWarSyllableStat.analysis_key == meta.analysis_key
+            ).delete()
+            db.query(models.BlueWarWordStat).filter(models.BlueWarWordStat.analysis_key == meta.analysis_key).delete()
+            db.query(models.BlueWarAnalysisMeta).filter(models.BlueWarAnalysisMeta.analysis_key == meta.analysis_key).delete()
+
+            created_at = datetime.utcnow()
+            try:
+                ca = pm.get("created_at")
+                if isinstance(ca, str) and ca:
+                    created_at = datetime.fromisoformat(ca)
+            except Exception:
+                created_at = datetime.utcnow()
+
+            db.add(
+                models.BlueWarAnalysisMeta(
+                    analysis_key=meta.analysis_key,
+                    list_name=meta.list_name,
+                    pack_version=meta.pack_version,
+                    words_sha256=meta.words_sha256,
+                    word_count=meta.word_count,
+                    dooum_sha256=meta.dooum_sha256,
+                    algo_version=meta.algo_version,
+                    created_at=created_at,
+                )
+            )
+
+            syl_objs: List[models.BlueWarSyllableStat] = []
+            for row in (payload.get("syllables") or []):
+                if not isinstance(row, dict):
+                    continue
+                sample = row.get("sample_win_words")
+                if isinstance(sample, list):
+                    sample_json = json.dumps(sample, ensure_ascii=False)
+                else:
+                    sample_json = json.dumps([], ensure_ascii=False)
+                syl_objs.append(
+                    models.BlueWarSyllableStat(
+                        analysis_key=meta.analysis_key,
+                        syllable=str(row.get("syllable") or ""),
+                        node_type=str(row.get("node_type") or NodeType.DRAW),
+                        out_moves=int(row.get("out_moves") or 0),
+                        in_moves=int(row.get("in_moves") or 0),
+                        win_moves=int(row.get("win_moves") or 0),
+                        lose_moves=int(row.get("lose_moves") or 0),
+                        draw_moves=int(row.get("draw_moves") or 0),
+                        sample_win_words=sample_json,
+                        updated_at=datetime.utcnow(),
+                    )
+                )
+
+            if syl_objs:
+                db.bulk_save_objects(syl_objs)
+
+            word_objs: List[models.BlueWarWordStat] = []
+            for row in (payload.get("words") or []):
+                if not isinstance(row, dict):
+                    continue
+                word_objs.append(
+                    models.BlueWarWordStat(
+                        analysis_key=meta.analysis_key,
+                        word=str(row.get("word") or ""),
+                        start_syllable=str(row.get("start_syllable") or "") or None,
+                        end_syllable=str(row.get("end_syllable") or "") or None,
+                        node_type=str(row.get("node_type") or NodeType.DRAW),
+                        updated_at=datetime.utcnow(),
+                    )
+                )
+
+            if word_objs:
+                db.bulk_save_objects(word_objs)
+
+            db.commit()
+            _progress(5, total_steps, "restored")
+            return meta
+
+    # 2) No cache -> compute
+    _progress(2, total_steps, "compute graph")
+
+    status, out_moves, in_moves, moves, _preds, pred_edges, win_witness, lose_best, dist = _retrograde_proof(words)
+
+    # best-effort save explanation graph cache
+    try:
+        analysis_cache.save_graph(
+            meta.analysis_key,
+            {
+                "analysis_key": meta.analysis_key,
+                "status": status,
+                "out_moves": out_moves,
+                "in_moves": in_moves,
+                "moves": moves,
+                "pred_edges": pred_edges,
+                "mate_dist": dist,
+                "win_witness": win_witness,
+                "lose_best": lose_best,
+            },
+        )
+    except Exception:
+        pass
+
+    _progress(3, total_steps, "delete old rows")
 
     # Remove existing rows for this key
     db.query(models.BlueWarSyllableStat).filter(models.BlueWarSyllableStat.analysis_key == meta.analysis_key).delete()
@@ -718,7 +917,7 @@ def rebuild_analysis(
 
     now = datetime.utcnow()
 
-    _progress(3, total_steps, "insert meta")
+    _progress(4, total_steps, "insert rows")
 
     # Insert meta
     db.add(
@@ -734,17 +933,17 @@ def rebuild_analysis(
         )
     )
 
-    _progress(4, total_steps, "insert syllables")
-
     # Syllable stats
     syl_rows: List[models.BlueWarSyllableStat] = []
+    syl_payload: List[dict] = []
     for syl, t in sorted(status.items(), key=lambda kv: kv[0]):
         mv = moves.get(syl, [])
         win_ws = [w for (w, v) in mv if status.get(v) == NodeType.LOSE]
         lose_ws = [w for (w, v) in mv if status.get(v) == NodeType.WIN]
         draw_ws = [w for (w, v) in mv if status.get(v) == NodeType.DRAW]
 
-        sample = win_ws[:sample_words]
+        # Deterministic sample: shortest -> lexicographic
+        sample = sorted(win_ws, key=lambda x: (len(x), x))[: int(sample_words or 0)]
 
         syl_rows.append(
             models.BlueWarSyllableStat(
@@ -760,13 +959,24 @@ def rebuild_analysis(
                 updated_at=now,
             )
         )
+        syl_payload.append(
+            {
+                "syllable": syl,
+                "node_type": t,
+                "out_moves": int(out_moves.get(syl, 0)),
+                "in_moves": int(in_moves.get(syl, 0)),
+                "win_moves": int(len(win_ws)),
+                "lose_moves": int(len(lose_ws)),
+                "draw_moves": int(len(draw_ws)),
+                "sample_win_words": sample,
+            }
+        )
 
     db.bulk_save_objects(syl_rows)
 
-    _progress(5, total_steps, "insert words & commit")
-
     # Word stats (type derived from end syllable)
     word_rows: List[models.BlueWarWordStat] = []
+    word_payload: List[dict] = []
     for w in words:
         s = _first_char(w)
         e = _last_char(w)
@@ -787,10 +997,53 @@ def rebuild_analysis(
                 updated_at=now,
             )
         )
+        word_payload.append(
+            {
+                "word": w,
+                "start_syllable": s,
+                "end_syllable": e,
+                "node_type": wt,
+            }
+        )
 
     db.bulk_save_objects(word_rows)
     db.commit()
 
+    # 3) Save payload cache (best-effort)
+    try:
+        node_count = int(len(status))
+        edge_count = int(sum(int(x) for x in out_moves.values()))
+        type_counts = {NodeType.WIN: 0, NodeType.LOSE: 0, NodeType.DRAW: 0}
+        for _t in status.values():
+            if _t in type_counts:
+                type_counts[_t] += 1
+
+        analysis_cache.save_payload(
+            meta.analysis_key,
+            {
+                "meta": {
+                    "analysis_key": meta.analysis_key,
+                    "list_name": meta.list_name,
+                    "pack_version": meta.pack_version,
+                    "words_sha256": meta.words_sha256,
+                    "word_count": meta.word_count,
+                    "dooum_sha256": meta.dooum_sha256,
+                    "algo_version": meta.algo_version,
+                    "created_at": now.isoformat(),
+                },
+                "syllables": syl_payload,
+                "words": word_payload,
+                "stats": {
+                    "node_count": node_count,
+                    "edge_count": edge_count,
+                    "syllable_type_counts": type_counts,
+                },
+            },
+        )
+    except Exception:
+        pass
+
+    _progress(5, total_steps, "done")
     return meta
 
 
