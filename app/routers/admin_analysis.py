@@ -16,7 +16,7 @@ from app.dependencies import get_db, get_current_admin_user
 from app.utils.wordlists import WORDLIST_LABELS
 from app.utils import dictpacks
 from app.config import settings
-from app.bluewar.analysis_engine import prepare_input, explain_syllable
+from app.bluewar.analysis_engine import prepare_input, explain_syllable, explain_word
 from app.bluewar.analysis_jobs import enqueue_rebuild_job
 from app.bluewar.suggestion_export import build_suggestion_text, fetch_neutral_words
 from app.routers.api_wordlists import _parse_txt as parse_wordlist_txt
@@ -465,6 +465,46 @@ def analysis_syllable_detail(
             "analysis_key": meta_input.analysis_key,
             "syllable": syllable,
             "max_steps": max_steps,
+            "info": info,
+        },
+    )
+
+
+@router.get("/word/{word}")
+def analysis_word_detail(
+    word: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    list_name = (request.query_params.get("list") or "blue_archive_words").strip()
+    pack = (request.query_params.get("pack") or "").strip() or None
+    max_steps = int((request.query_params.get("max_steps") or "10").strip() or "10")
+    max_steps = max(3, min(30, max_steps))
+
+    meta_input, words = prepare_input(db, list_name=list_name, pack_version=pack)
+
+    w = (word or "").strip()
+    row = (
+        db.query(models.BlueWarWordStat)
+        .filter(models.BlueWarWordStat.analysis_key == meta_input.analysis_key)
+        .filter(models.BlueWarWordStat.word == w)
+        .first()
+    )
+
+    info = explain_word(analysis_key=meta_input.analysis_key, words=words, word=w, max_steps=max_steps)
+
+    return templates.TemplateResponse(
+        "admin_analysis_word_detail.html",
+        {
+            "request": request,
+            "list_labels": WORDLIST_LABELS,
+            "list_name": list_name,
+            "pack": pack,
+            "analysis_key": meta_input.analysis_key,
+            "word": w,
+            "max_steps": max_steps,
+            "row": row,
             "info": info,
         },
     )

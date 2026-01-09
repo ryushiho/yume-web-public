@@ -62,7 +62,7 @@
       <tbody>
         {% for r in rows %}
           <tr>
-            <td style="font-weight:700;">{{ r.word }}</td>
+            <td style="font-weight:700;"><a href="/admin/analysis/word/{{ r.word | urlencode }}?list={{ list_name }}&pack={{ pack or '' }}">{{ r.word }}</a></td>
             <td>{{ r.start_syllable }}</td>
             <td>{{ r.end_syllable }}</td>
             <td>{{ r.node_type }}</td>

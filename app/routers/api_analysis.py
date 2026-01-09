@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.dependencies import get_db
-from app.bluewar.analysis_engine import NodeType, prepare_input
+from app.bluewar.analysis_engine import NodeType, prepare_input, explain_syllable, explain_word
 from app.bluewar.analysis_jobs import enqueue_rebuild_job, JOB_PENDING, JOB_RUNNING
 from app.bluewar.suggestion_export import build_suggestion_text, fetch_neutral_words
 from app.routers.api_wordlists import _require_wordlist_token
@@ -233,6 +233,8 @@ def analysis_lookup_syllable(
     syl: str,
     list: str = "blue_archive_words",
     pack: Optional[str] = None,
+    explain: int = 0,
+    max_steps: int = 10,
     db: Session = Depends(get_db),
     _auth: None = Depends(_require_wordlist_token),
 ) -> Dict[str, Any]:
@@ -245,7 +247,7 @@ def analysis_lookup_syllable(
     list_name = (list or "blue_archive_words").strip()
     pack_version = (pack or "").strip() or None
 
-    meta_input, _ = prepare_input(db, list_name=list_name, pack_version=pack_version)
+    meta_input, words = prepare_input(db, list_name=list_name, pack_version=pack_version)
 
     meta = (
         db.query(models.BlueWarAnalysisMeta)
@@ -264,7 +266,7 @@ def analysis_lookup_syllable(
     if not row:
         raise HTTPException(status_code=404, detail="not found")
 
-    return {
+    out = {
         "analysis_key": meta_input.analysis_key,
         "syllable": row.syllable,
         "node_type": row.node_type,
@@ -276,6 +278,18 @@ def analysis_lookup_syllable(
         "sample_win_words": _parse_json_list(row.sample_win_words),
     }
 
+    if int(explain or 0) == 1:
+        ms = max(3, min(30, int(max_steps or 10)))
+        out["explain"] = explain_syllable(
+            analysis_key=meta_input.analysis_key,
+            words=words,
+            syllable=syllable,
+            max_steps=ms,
+            start_player=0,
+        )
+
+    return out
+
 
 @router.get("/word/{word}")
 def analysis_lookup_word(
@@ -283,6 +297,8 @@ def analysis_lookup_word(
     word: str,
     list: str = "blue_archive_words",
     pack: Optional[str] = None,
+    explain: int = 0,
+    max_steps: int = 10,
     db: Session = Depends(get_db),
     _auth: None = Depends(_require_wordlist_token),
 ) -> Dict[str, Any]:
@@ -295,7 +311,7 @@ def analysis_lookup_word(
     list_name = (list or "blue_archive_words").strip()
     pack_version = (pack or "").strip() or None
 
-    meta_input, _ = prepare_input(db, list_name=list_name, pack_version=pack_version)
+    meta_input, words = prepare_input(db, list_name=list_name, pack_version=pack_version)
 
     meta = (
         db.query(models.BlueWarAnalysisMeta)
@@ -314,10 +330,21 @@ def analysis_lookup_word(
     if not row:
         raise HTTPException(status_code=404, detail="not found")
 
-    return {
+    out = {
         "analysis_key": meta_input.analysis_key,
         "word": row.word,
         "node_type": row.node_type,
         "start_syllable": row.start_syllable,
         "end_syllable": row.end_syllable,
     }
+
+    if int(explain or 0) == 1:
+        ms = max(3, min(30, int(max_steps or 10)))
+        out["explain"] = explain_word(
+            analysis_key=meta_input.analysis_key,
+            words=words,
+            word=w,
+            max_steps=ms,
+        )
+
+    return out

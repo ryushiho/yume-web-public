@@ -573,6 +573,7 @@ def explain_syllable(
     words: List[str],
     syllable: str,
     max_steps: int = 10,
+    start_player: int = 0,
 ) -> Dict[str, object]:
     """Explain why a syllable is WIN/LOSE/DRAW, including a sample word route."""
 
@@ -617,7 +618,7 @@ def explain_syllable(
     line: List[Dict[str, object]] = []
 
     cur = syl
-    player = 0  # 0: 나(현재 플레이어), 1: 상대
+    player = 0 if int(start_player or 0) == 0 else 1  # 0: 나(현재 플레이어), 1: 상대
     for step in range(max_steps):
         ct = g.status.get(cur)
         if ct == NodeType.LOSE and int(g.out_moves.get(cur, 0)) == 0:
@@ -721,7 +722,78 @@ def explain_syllable(
         "out_moves": out_n,
         "in_moves": int(g.in_moves.get(syl, 0)),
         "mate_dist": g.mate_dist.get(syl),
+        "start_player": int(start_player or 0),
         "line": line,
+    }
+
+
+def explain_word(
+    *,
+    analysis_key: str,
+    words: List[str],
+    word: str,
+    max_steps: int = 10,
+) -> Dict[str, object]:
+    """Explain why a word is WIN/LOSE/DRAW, with a trigger route after using it.
+
+    The route is explained from the opponent's turn at the word's end syllable.
+    """
+
+    w = (word or "").strip()
+    if not w:
+        return {
+            "word": "",
+            "node_type": None,
+            "reason": "empty",
+            "start_syllable": "",
+            "end_syllable": "",
+            "allowed_start": [],
+            "end": {"line": []},
+            "trigger_line": [],
+        }
+
+    s = _first_char(w)
+    e = _last_char(w)
+
+    allowed_start = sorted(list(allowed_first_chars(s)))
+    # opponent to move after we play the word
+    end_info = explain_syllable(
+        analysis_key=analysis_key,
+        words=words,
+        syllable=e,
+        max_steps=max_steps,
+        start_player=1,
+    )
+
+    end_t = end_info.get("node_type")
+    if end_t == NodeType.LOSE:
+        wt = NodeType.WIN
+    elif end_t == NodeType.WIN:
+        wt = NodeType.LOSE
+    elif end_t == NodeType.DRAW:
+        wt = NodeType.DRAW
+    else:
+        wt = None
+
+    reason = ""
+    if wt == NodeType.WIN:
+        reason = "이 단어를 쓰면 상대가 필패 음절에서 시작합니다."
+    elif wt == NodeType.LOSE:
+        reason = "이 단어를 쓰면 상대가 필킬 음절에서 시작합니다."
+    elif wt == NodeType.DRAW:
+        reason = "이 단어를 쓰면 중립 영역(순환 가능)으로 들어갑니다."
+    else:
+        reason = "unknown"
+
+    return {
+        "word": w,
+        "node_type": wt,
+        "reason": reason,
+        "start_syllable": s,
+        "end_syllable": e,
+        "allowed_start": allowed_start,
+        "end": end_info,
+        "trigger_line": end_info.get("line") or [],
     }
 
 def rebuild_analysis(
