@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
+from pathlib import Path
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, Request, Form
+from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_admin_user
@@ -15,6 +18,7 @@ from app.utils import dictpacks
 from app.config import settings
 from app.bluewar.analysis_engine import prepare_input, explain_syllable
 from app.bluewar.analysis_jobs import enqueue_rebuild_job
+from app.bluewar.suggestion_export import build_suggestion_text, fetch_neutral_words
 from app import models
 
 
@@ -59,6 +63,36 @@ def analysis_index(
         .first()
     )
 
+
+    # quick stats (for UI)
+    word_counts: Dict[str, int] = {}
+    syllable_counts: Dict[str, int] = {}
+    neutral_word_count: int = 0
+
+    if stored:
+        try:
+            wc_rows = (
+                db.query(models.BlueWarWordStat.node_type, func.count(models.BlueWarWordStat.id))
+                .filter(models.BlueWarWordStat.analysis_key == meta_input.analysis_key)
+                .group_by(models.BlueWarWordStat.node_type)
+                .all()
+            )
+            word_counts = {str(t): int(c) for (t, c) in wc_rows if t}
+
+            sc_rows = (
+                db.query(models.BlueWarSyllableStat.node_type, func.count(models.BlueWarSyllableStat.id))
+                .filter(models.BlueWarSyllableStat.analysis_key == meta_input.analysis_key)
+                .group_by(models.BlueWarSyllableStat.node_type)
+                .all()
+            )
+            syllable_counts = {str(t): int(c) for (t, c) in sc_rows if t}
+            neutral_word_count = int(word_counts.get("DRAW", 0))
+        except Exception:
+            # best-effort (never break admin page)
+            word_counts = {}
+            syllable_counts = {}
+            neutral_word_count = 0
+
     packs = _pack_versions()
     packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
     packs_default = (settings.WORDLIST_PACKS_DEFAULT or "").strip()
@@ -76,6 +110,9 @@ def analysis_index(
             "meta_input": meta_input,
             "stored": stored,
             "job": job,
+            "word_counts": word_counts,
+            "syllable_counts": syllable_counts,
+            "neutral_word_count": neutral_word_count,
             "ok": ok,
             "error": error,
         },
@@ -105,6 +142,112 @@ def analysis_rebuild(
         status_code=303,
     )
 
+
+
+@router.get("/suggestion.txt")
+def analysis_suggestion_download(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    list_name = (request.query_params.get("list") or "blue_archive_words").strip()
+    pack = (request.query_params.get("pack") or "").strip() or None
+    fmt = (request.query_params.get("fmt") or "grouped").strip().lower()
+
+    meta_input, _ = prepare_input(db, list_name=list_name, pack_version=pack)
+
+    stored = (
+        db.query(models.BlueWarAnalysisMeta)
+        .filter(models.BlueWarAnalysisMeta.analysis_key == meta_input.analysis_key)
+        .order_by(models.BlueWarAnalysisMeta.created_at.desc())
+        .first()
+    )
+    if not stored:
+        return RedirectResponse(
+            url=f"/admin/analysis/?list={list_name}&pack={pack or ''}&error=no_result",
+            status_code=303,
+        )
+
+    words = fetch_neutral_words(db, meta_input.analysis_key)
+    txt = build_suggestion_text(words, fmt=fmt)  # type: ignore[arg-type]
+
+    fn = f"suggestion_{meta_input.list_name}_{meta_input.pack_version or 'db'}_{meta_input.analysis_key[:8]}.txt"
+    headers = {"Content-Disposition": f'attachment; filename="{fn}"'}
+    return Response(content=txt, media_type="text/plain; charset=utf-8", headers=headers)
+
+
+@router.post("/suggestion/apply")
+def analysis_suggestion_apply(
+    request: Request,
+    fmt: str = Form("grouped"),
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    # Apply writes to a dict-pack on filesystem.
+    list_name = (request.query_params.get("list") or "blue_archive_words").strip()
+    pack = (request.query_params.get("pack") or "").strip() or None
+
+    meta_input, _ = prepare_input(db, list_name=list_name, pack_version=pack)
+    target_pack = (meta_input.pack_version or "").strip() or None
+    if not target_pack:
+        return RedirectResponse(
+            url=f"/admin/analysis/?list={list_name}&error=need_pack",
+            status_code=303,
+        )
+
+    stored = (
+        db.query(models.BlueWarAnalysisMeta)
+        .filter(models.BlueWarAnalysisMeta.analysis_key == meta_input.analysis_key)
+        .order_by(models.BlueWarAnalysisMeta.created_at.desc())
+        .first()
+    )
+    if not stored:
+        return RedirectResponse(
+            url=f"/admin/analysis/?list={list_name}&pack={target_pack}&error=no_result",
+            status_code=303,
+        )
+
+    words = fetch_neutral_words(db, meta_input.analysis_key)
+    txt = build_suggestion_text(words, fmt=(fmt or "grouped").strip().lower())  # type: ignore[arg-type]
+
+    packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
+    version_dir = dictpacks.versions_dir(packs_dir) / target_pack
+    if not version_dir.exists() or not version_dir.is_dir():
+        return RedirectResponse(
+            url=f"/admin/analysis/?list={list_name}&pack={target_pack}&error=bad_pack",
+            status_code=303,
+        )
+
+    # Write to <pack>/suggestion.txt with atomic replace + backup
+    p = dictpacks.pack_file_path(target_pack, "suggestion.txt", env_override=packs_dir)
+    if not p.exists():
+        return RedirectResponse(
+            url=f"/admin/analysis/?list={list_name}&pack={target_pack}&error=no_suggestion_file",
+            status_code=303,
+        )
+
+    try:
+        ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        bak = p.with_suffix(p.suffix + f".bak_{ts}")
+        try:
+            bak.write_text(p.read_text(encoding="utf-8"), encoding="utf-8")
+        except Exception:
+            # ignore backup failure (never block apply)
+            pass
+
+        tmp = p.with_suffix(p.suffix + ".tmp")
+        tmp.write_text(txt, encoding="utf-8")
+        tmp.replace(p)
+    except Exception:
+        return RedirectResponse(
+            url=f"/admin/analysis/?list={list_name}&pack={target_pack}&error=write_failed",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url=f"/admin/analysis/?list={list_name}&pack={target_pack}&ok=suggestion_applied",
+        status_code=303,
+    )
 
 @router.get("/syllables")
 def analysis_syllables(

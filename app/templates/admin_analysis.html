@@ -106,6 +106,38 @@
     {% if stored %}
       <hr style="border:none; border-top:1px solid #1f2937; margin:0.9rem 0;" />
       <div style="color:#9ca3af; font-size:0.9rem;">저장된 분석 생성 시각: {{ stored.created_at }}</div>
+
+      <div style="margin-top:0.6rem; display:flex; flex-wrap:wrap; gap:0.8rem; align-items:center; font-size:0.9rem;">
+        <div style="color:#9ca3af;">단어: WIN {{ word_counts.get('WIN', 0) }} · LOSE {{ word_counts.get('LOSE', 0) }} · DRAW {{ word_counts.get('DRAW', 0) }}</div>
+        <div style="color:#9ca3af;">음절: WIN {{ syllable_counts.get('WIN', 0) }} · LOSE {{ syllable_counts.get('LOSE', 0) }} · DRAW {{ syllable_counts.get('DRAW', 0) }}</div>
+      </div>
+
+      <div style="margin-top:0.8rem; border:1px solid #1f2937; border-radius:0.8rem; padding:0.9rem; background:#0b1220;">
+        <div style="font-weight:600; margin-bottom:0.5rem;">Suggestion.txt (중립 단어)</div>
+        <div style="display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center;">
+          <a class="btn btn-secondary" href="/admin/analysis/suggestion.txt?list={{ list_name }}&pack={{ pack or '' }}&fmt=grouped">다운로드 (묶음)</a>
+          <a class="btn btn-secondary" href="/admin/analysis/suggestion.txt?list={{ list_name }}&pack={{ pack or '' }}&fmt=plain">다운로드 (1줄)</a>
+
+          {% if meta_input.pack_version %}
+            <form method="post" action="/admin/analysis/suggestion/apply?list={{ list_name }}&pack={{ pack or '' }}" style="margin:0;">
+              <input type="hidden" name="fmt" value="grouped" />
+              <button type="submit" class="btn btn-primary">팩에 적용 (묶음)</button>
+            </form>
+            <form method="post" action="/admin/analysis/suggestion/apply?list={{ list_name }}&pack={{ pack or '' }}" style="margin:0;">
+              <input type="hidden" name="fmt" value="plain" />
+              <button type="submit" class="btn btn-secondary">팩에 적용 (1줄)</button>
+            </form>
+          {% else %}
+            <span style="color:#9ca3af; font-size:0.85rem;">팩 버전(월) 선택 시 적용 가능</span>
+          {% endif %}
+
+          <span style="color:#9ca3af; font-size:0.85rem;">중립 단어 수: {{ neutral_word_count }}</span>
+        </div>
+        <div style="margin-top:0.4rem; color:#9ca3af; font-size:0.82rem;">
+          적용 시 현재 팩의 <code>suggestion.txt</code>를 덮어씁니다 (서버에 백업 파일도 남겨둠).
+        </div>
+      </div>
+
     {% endif %}
   </div>
 
