@@ -19,6 +19,7 @@ from app.config import settings
 from app.bluewar.analysis_engine import prepare_input, explain_syllable
 from app.bluewar.analysis_jobs import enqueue_rebuild_job
 from app.bluewar.suggestion_export import build_suggestion_text, fetch_neutral_words
+from app.routers.api_wordlists import _parse_txt as parse_wordlist_txt
 from app import models
 
 
@@ -29,6 +30,55 @@ templates = Jinja2Templates(directory="app/templates")
 def _pack_versions() -> list[str]:
     packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
     return dictpacks.list_versions(packs_dir)
+
+
+def _read_text_robust(path: Path) -> str:
+    """UTF-8 우선, 실패하면 CP949로 읽는다."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return path.read_text(encoding="cp949")
+
+
+def _sort_words(words: list[str]) -> list[str]:
+    out = [ (w or '').strip() for w in (words or []) if (w or '').strip() ]
+    # deterministic (same as suggestion_export): short -> lexicographic
+    out = sorted(set(out), key=lambda x: (len(x), x))
+    return out
+
+
+def _suggestion_diff(*, pack: str, packs_dir: str, neutral_words: list[str]) -> dict | None:
+    """Compare generated neutral words with current pack's suggestion.txt.
+
+    Returns summary dict or None if file is missing.
+    """
+    if not pack:
+        return None
+    try:
+        p = dictpacks.pack_file_path(pack, 'suggestion.txt', env_override=packs_dir)
+        if not p.exists() or not p.is_file():
+            return None
+        current_txt = _read_text_robust(p)
+        current_words = parse_wordlist_txt(current_txt)
+        cur_set = set(current_words)
+        neu_set = set(neutral_words)
+
+        added = sorted(list(neu_set - cur_set), key=lambda x: (len(x), x))
+        removed = sorted(list(cur_set - neu_set), key=lambda x: (len(x), x))
+        same = len(neu_set & cur_set)
+
+        return {
+            'pack_path': str(p),
+            'current_count': len(cur_set),
+            'neutral_count': len(neu_set),
+            'same_count': int(same),
+            'added_count': len(added),
+            'removed_count': len(removed),
+            'added_sample': added[:40],
+            'removed_sample': removed[:40],
+        }
+    except Exception:
+        return None
 
 
 @router.get("/")
@@ -93,6 +143,39 @@ def analysis_index(
             syllable_counts = {}
             neutral_word_count = 0
 
+    # Suggestion preview/diff (best-effort)
+    suggest_preview_plain = None
+    suggest_preview_grouped = None
+    suggest_diff = None
+
+    if stored:
+        try:
+            neutral_words = fetch_neutral_words(db, meta_input.analysis_key)
+            neutral_sorted = _sort_words(neutral_words)
+
+            # preview: keep small to avoid heavy HTML
+            head_plain = neutral_sorted[:120]
+            if head_plain:
+                suggest_preview_plain = "\n".join(head_plain)
+                if len(neutral_sorted) > len(head_plain):
+                    suggest_preview_plain += "\n..."
+
+            # grouped preview: take first ~300 words then group
+            head_group_words = neutral_sorted[:300]
+            if head_group_words:
+                suggest_preview_grouped = build_suggestion_text(head_group_words, fmt="grouped")
+                lines2 = (suggest_preview_grouped or "").splitlines()
+                if len(lines2) > 25:
+                    suggest_preview_grouped = "\n".join(lines2[:25]) + "\n..."
+
+            packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
+            if meta_input.pack_version:
+                suggest_diff = _suggestion_diff(pack=meta_input.pack_version, packs_dir=packs_dir, neutral_words=neutral_words)
+        except Exception:
+            suggest_preview_plain = None
+            suggest_preview_grouped = None
+            suggest_diff = None
+
     packs = _pack_versions()
     packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
     packs_default = (settings.WORDLIST_PACKS_DEFAULT or "").strip()
@@ -113,6 +196,9 @@ def analysis_index(
             "word_counts": word_counts,
             "syllable_counts": syllable_counts,
             "neutral_word_count": neutral_word_count,
+            "suggest_preview_plain": suggest_preview_plain,
+            "suggest_preview_grouped": suggest_preview_grouped,
+            "suggest_diff": suggest_diff,
             "ok": ok,
             "error": error,
         },
@@ -174,6 +260,68 @@ def analysis_suggestion_download(
     fn = f"suggestion_{meta_input.list_name}_{meta_input.pack_version or 'db'}_{meta_input.analysis_key[:8]}.txt"
     headers = {"Content-Disposition": f'attachment; filename="{fn}"'}
     return Response(content=txt, media_type="text/plain; charset=utf-8", headers=headers)
+
+
+
+
+@router.get("/suggestion/diff.txt")
+def analysis_suggestion_diff_download(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    """현재 팩 suggestion.txt와 '생성될 중립 단어'의 차이를 텍스트로 내려준다."""
+    list_name = (request.query_params.get("list") or "blue_archive_words").strip()
+    pack = (request.query_params.get("pack") or "").strip() or None
+
+    meta_input, _ = prepare_input(db, list_name=list_name, pack_version=pack)
+
+    stored = (
+        db.query(models.BlueWarAnalysisMeta)
+        .filter(models.BlueWarAnalysisMeta.analysis_key == meta_input.analysis_key)
+        .order_by(models.BlueWarAnalysisMeta.created_at.desc())
+        .first()
+    )
+    if not stored or not meta_input.pack_version:
+        return RedirectResponse(
+            url=f"/admin/analysis/?list={list_name}&pack={pack or ''}&error=no_result",
+            status_code=303,
+        )
+
+    neutral_words = fetch_neutral_words(db, meta_input.analysis_key)
+
+    packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
+    diff = _suggestion_diff(pack=meta_input.pack_version, packs_dir=packs_dir, neutral_words=neutral_words)
+    if not diff:
+        return RedirectResponse(
+            url=f"/admin/analysis/?list={list_name}&pack={meta_input.pack_version}&error=no_suggestion_file",
+            status_code=303,
+        )
+
+    lines = []
+    lines.append(f"analysis_key: {meta_input.analysis_key}")
+    lines.append(f"pack: {meta_input.pack_version}")
+    lines.append(f"current_count: {diff.get('current_count')}")
+    lines.append(f"neutral_count: {diff.get('neutral_count')}")
+    lines.append(f"same: {diff.get('same_count')}")
+    lines.append(f"added: {diff.get('added_count')}")
+    lines.append(f"removed: {diff.get('removed_count')}")
+    lines.append("")
+
+    lines.append("[added_sample]")
+    for w in diff.get('added_sample') or []:
+        lines.append(str(w))
+    lines.append("")
+
+    lines.append("[removed_sample]")
+    for w in diff.get('removed_sample') or []:
+        lines.append(str(w))
+    lines.append("")
+
+    content = "\n".join(lines)
+    fn = f"suggestion_diff_{meta_input.pack_version}_{meta_input.analysis_key[:8]}.txt"
+    headers = {"Content-Disposition": f'attachment; filename="{fn}"'}
+    return Response(content=content, media_type="text/plain; charset=utf-8", headers=headers)
 
 
 @router.post("/suggestion/apply")

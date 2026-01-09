@@ -136,6 +136,43 @@
         <div style="margin-top:0.4rem; color:#9ca3af; font-size:0.82rem;">
           적용 시 현재 팩의 <code>suggestion.txt</code>를 덮어씁니다 (서버에 백업 파일도 남겨둠).
         </div>
+
+        {% if suggest_preview_plain or suggest_preview_grouped %}
+          <div style="margin-top:0.7rem; display:grid; grid-template-columns:1fr 1fr; gap:0.8rem;">
+            <div>
+              <div style="color:#9ca3af; font-size:0.85rem; margin-bottom:0.35rem;">미리보기 (plain 일부)</div>
+              <pre style="white-space:pre-wrap; max-height:220px; overflow:auto; padding:0.6rem; border-radius:0.6rem; background:#060b16; border:1px solid #1f2937; color:#e5e7eb; font-size:0.83rem;">{{ suggest_preview_plain or '' }}</pre>
+            </div>
+            <div>
+              <div style="color:#9ca3af; font-size:0.85rem; margin-bottom:0.35rem;">미리보기 (grouped 일부)</div>
+              <pre style="white-space:pre-wrap; max-height:220px; overflow:auto; padding:0.6rem; border-radius:0.6rem; background:#060b16; border:1px solid #1f2937; color:#e5e7eb; font-size:0.83rem;">{{ suggest_preview_grouped or '' }}</pre>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if suggest_diff %}
+          <div style="margin-top:0.9rem; border-top:1px solid #1f2937; padding-top:0.8rem;">
+            <div style="color:#9ca3af; font-size:0.85rem; margin-bottom:0.35rem;">현재 팩 suggestion.txt와의 차이</div>
+            <div style="display:flex; flex-wrap:wrap; gap:0.8rem; align-items:center; font-size:0.88rem;">
+              <div style="color:#e5e7eb;">현재 {{ suggest_diff.current_count }} / 생성 {{ suggest_diff.neutral_count }} / 동일 {{ suggest_diff.same_count }}</div>
+              <div style="color:#e5e7eb;">추가 <b>{{ suggest_diff.added_count }}</b> · 제거 <b>{{ suggest_diff.removed_count }}</b></div>
+              <a class="btn btn-secondary" href="/admin/analysis/suggestion/diff.txt?list={{ list_name }}&pack={{ meta_input.pack_version }}">diff 다운로드</a>
+            </div>
+
+            <div style="margin-top:0.7rem; display:grid; grid-template-columns:1fr 1fr; gap:0.8rem;">
+              <div>
+                <div style="color:#9ca3af; font-size:0.85rem; margin-bottom:0.35rem;">추가 샘플</div>
+                <pre style="white-space:pre-wrap; max-height:180px; overflow:auto; padding:0.6rem; border-radius:0.6rem; background:#060b16; border:1px solid #1f2937; color:#e5e7eb; font-size:0.83rem;">{{ (suggest_diff.added_sample or []) | join('\n') }}</pre>
+              </div>
+              <div>
+                <div style="color:#9ca3af; font-size:0.85rem; margin-bottom:0.35rem;">제거 샘플</div>
+                <pre style="white-space:pre-wrap; max-height:180px; overflow:auto; padding:0.6rem; border-radius:0.6rem; background:#060b16; border:1px solid #1f2937; color:#e5e7eb; font-size:0.83rem;">{{ (suggest_diff.removed_sample or []) | join('\n') }}</pre>
+              </div>
+            </div>
+            <div style="margin-top:0.35rem; color:#9ca3af; font-size:0.82rem;">샘플은 일부만 표시됩니다.</div>
+          </div>
+        {% endif %}
+
       </div>
 
     {% endif %}

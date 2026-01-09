@@ -15,7 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
 
 from config import settings
-from app.routers import auth, dashboard, users, api_bluewar, ranking, bluewar, home, member, admin_members, aby, api_aby, api_ranking
+from app.routers import auth, dashboard, users, api_bluewar, ranking, bluewar, home, member, admin_members, aby, api_aby, api_ranking, api_analysis
 from app.routers import admin_wordlists
 from app.routers import admin_analysis
 from app.routers import admin_integration
@@ -111,6 +111,7 @@ app.include_router(api_bluewar.api_router)
 app.include_router(api_ranking.router)
 app.include_router(api_aby.router)
 app.include_router(api_wordlists.router)
+app.include_router(api_analysis.router)
 app.include_router(ranking.router)
 app.include_router(words.router)
 app.include_router(admin_members.router)

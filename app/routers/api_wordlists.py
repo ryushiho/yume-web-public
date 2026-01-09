@@ -154,22 +154,56 @@ def _sha256(text: str) -> str:
 
 
 def _parse_txt(text: str) -> List[str]:
-    """txt(1줄=1단어) -> 단어 배열.
+    """txt -> 단어 배열.
 
-    - 공백/탭/개행 제거
-    - 빈 줄 제거
-    - 중복 제거(원본 순서 유지)
+    지원 포맷:
+      - 1줄=1단어: "갑니다토라마루"
+      - 묶음: "갑 : 갑니다토라마루, 갑작스러운제안"
+      - 콤마/공백 토큰: "a, b, c" 또는 "a b c"
+
+    규칙:
+      - 공백/탭/개행 제거
+      - 빈 줄/주석(#...) 제거
+      - 중복 제거(원본 순서 유지)
+      - 내부 공백이 포함된 토큰은 무시(끝말잇기 단어 호환)
     """
+
+    def _iter_tokens(line: str) -> List[str]:
+        s = (line or "").strip()
+        if not s:
+            return []
+        if s.startswith("#"):
+            return []
+
+        # "갑 : ..." 형태면 ':' 오른쪽만 파싱
+        if ":" in s:
+            left, right = s.split(":", 1)
+            # left는 음절/라벨일 가능성이 높지만, 안전하게 right만 사용
+            s = (right or "").strip()
+            if not s:
+                return []
+
+        # commas first
+        if "," in s:
+            parts = [x.strip() for x in s.split(",")]
+        else:
+            parts = s.split()
+
+        return [p for p in parts if p]
+
     seen = set()
     out: List[str] = []
-    for line in text.splitlines():
-        w = (line or "").strip()
-        if not w:
-            continue
-        if w in seen:
-            continue
-        seen.add(w)
-        out.append(w)
+    for line in (text or "").splitlines():
+        for tok in _iter_tokens(line):
+            w = (tok or "").strip()
+            if not w:
+                continue
+            if any(ch.isspace() for ch in w):
+                continue
+            if w in seen:
+                continue
+            seen.add(w)
+            out.append(w)
     return out
 
 
