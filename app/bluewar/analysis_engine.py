@@ -186,7 +186,78 @@ def prepare_input(
     )
 
 
-def _retrograde_syllables(
+@dataclass
+class ComputedGraph:
+    """In-memory computed graph (cached per analysis_key).
+
+    This is used for explanation pages so we can show a concrete word route
+    (principal variation) without storing the entire graph in DB.
+    """
+
+    analysis_key: str
+    status: Dict[str, str]  # syllable -> NodeType
+    out_moves: Dict[str, int]
+    in_moves: Dict[str, int]
+    moves: Dict[str, List[Tuple[str, str]]]  # syllable -> [(word, next_syllable)]
+    pred_edges: Dict[str, List[Tuple[str, str]]]  # next_syllable -> [(prev_syllable, word)]
+    mate_dist: Dict[str, int]  # only for WIN/LOSE nodes (0 means immediate loss for player to move)
+    win_witness: Dict[str, Tuple[str, str]]  # syllable -> (word, next_syllable) where next is LOSE
+    lose_best: Dict[str, Tuple[str, str]]  # syllable -> (word, next_syllable) that prolongs the loss
+
+
+_GRAPH_CACHE: Dict[str, ComputedGraph] = {}
+_GRAPH_CACHE_ORDER: List[str] = []
+_GRAPH_CACHE_MAX = 8
+
+
+def _cache_get(key: str) -> Optional[ComputedGraph]:
+    g = _GRAPH_CACHE.get(key)
+    if not g:
+        return None
+    # refresh LRU
+    try:
+        _GRAPH_CACHE_ORDER.remove(key)
+    except ValueError:
+        pass
+    _GRAPH_CACHE_ORDER.append(key)
+    return g
+
+
+def _cache_put(key: str, graph: ComputedGraph) -> None:
+    _GRAPH_CACHE[key] = graph
+    try:
+        _GRAPH_CACHE_ORDER.remove(key)
+    except ValueError:
+        pass
+    _GRAPH_CACHE_ORDER.append(key)
+    while len(_GRAPH_CACHE_ORDER) > _GRAPH_CACHE_MAX:
+        old = _GRAPH_CACHE_ORDER.pop(0)
+        _GRAPH_CACHE.pop(old, None)
+
+
+def get_computed_graph(*, analysis_key: str, words: List[str]) -> ComputedGraph:
+    """Get (or compute) a cached graph for explanation."""
+    g = _cache_get(analysis_key)
+    if g:
+        return g
+
+    status, out_moves, in_moves, moves, preds, pred_edges, win_witness, lose_best, dist = _retrograde_proof(words)
+    g = ComputedGraph(
+        analysis_key=analysis_key,
+        status=status,
+        out_moves=out_moves,
+        in_moves=in_moves,
+        moves=moves,
+        pred_edges=pred_edges,
+        mate_dist=dist,
+        win_witness=win_witness,
+        lose_best=lose_best,
+    )
+    _cache_put(analysis_key, g)
+    return g
+
+
+def _retrograde_proof(
     words: List[str],
 ) -> Tuple[
     Dict[str, str],
@@ -194,17 +265,19 @@ def _retrograde_syllables(
     Dict[str, int],
     Dict[str, List[Tuple[str, str]]],
     Dict[str, List[str]],
+    Dict[str, List[Tuple[str, str]]],
+    Dict[str, Tuple[str, str]],
+    Dict[str, Tuple[str, str]],
+    Dict[str, int],
 ]:
-    """Compute syllable WIN/LOSE/DRAW via retrograde algorithm.
+    """Compute syllable WIN/LOSE/DRAW + proof helpers.
 
     Returns:
-      status: syllable -> NodeType
-      out_moves: syllable -> number of playable words (moves)
-      in_moves: syllable -> number of incoming moves
-      moves: syllable -> list of (word, next_syllable)
-      preds: syllable -> list of predecessor syllables (one entry per move)
+      status, out_moves, in_moves, moves, preds,
+      pred_edges, win_witness, lose_best, mate_dist
     """
 
+    # Index words by first syllable
     words_by_first: Dict[str, List[str]] = defaultdict(list)
     firsts: set[str] = set()
     lasts: set[str] = set()
@@ -220,19 +293,16 @@ def _retrograde_syllables(
         firsts.add(f)
         lasts.add(l)
 
-    # Nodes: all syllables that can appear as start condition or as next condition.
     nodes: set[str] = set(firsts) | set(lasts)
-    # Also include dooum source syllables that may appear as last syllable.
-    # (If they never appear, they don't matter; but this keeps stats stable.)
-    from .dooum import DOOUM_MAP
-    nodes |= set(DOOUM_MAP.keys())
-
     moves: Dict[str, List[Tuple[str, str]]] = {n: [] for n in nodes}
     preds: Dict[str, List[str]] = {n: [] for n in nodes}
+    pred_edges: Dict[str, List[Tuple[str, str]]] = {n: [] for n in nodes}
     out_moves: Dict[str, int] = {n: 0 for n in nodes}
     in_moves: Dict[str, int] = {n: 0 for n in nodes}
 
     # Build moves and predecessor lists (counting each word as one move)
+    # NOTE: dooum is applied as "allowed first syllables" on the current syllable.
+    #       That is consistent with Shiho's rule: 받침음절 X -> 두음 적용 가능한 시작음절(단방향)로도 시작 가능.
     for u in list(nodes):
         allowed = allowed_first_chars(u)
         if not allowed:
@@ -247,34 +317,70 @@ def _retrograde_syllables(
                     nodes.add(v)
                     moves[v] = []
                     preds[v] = []
+                    pred_edges[v] = []
                     out_moves[v] = 0
                     in_moves[v] = 0
                 moves[u].append((w, v))
                 preds[v].append(u)
+                pred_edges[v].append((u, w))
                 out_moves[u] += 1
                 in_moves[v] += 1
 
     # Retrograde
-    status: Dict[str, str] = {n: "" for n in nodes}
-    remaining = dict(out_moves)
+    status: Dict[str, str] = {}
+    remaining: Dict[str, int] = {n: int(out_moves.get(n, 0)) for n in nodes}
+
+    # mate_dist: number of plies to reach a terminal loss for the player who is to move,
+    # under optimal play. For LOSE nodes, this is "time until you lose" (you want it large).
+    # For WIN nodes, this is "time until you force the opponent to lose" (you want it small).
+    mate_dist: Dict[str, int] = {}
+    win_witness: Dict[str, Tuple[str, str]] = {}
+    lose_best: Dict[str, Tuple[str, str]] = {}
+
     q: deque[str] = deque()
 
+    # Terminal losing nodes: no outgoing moves
     for n in nodes:
-        if remaining.get(n, 0) == 0:
+        if int(out_moves.get(n, 0)) == 0:
             status[n] = NodeType.LOSE
+            mate_dist[n] = 0
             q.append(n)
+
+    def _pick_word_for_edge(u: str, v: str) -> str:
+        # deterministic: shortest, then lexicographic
+        cands = [w for (w, to) in moves.get(u, []) if to == v]
+        if cands:
+            return min(cands, key=lambda x: (len(x), x))
+        # fallback: scan pred_edges[v]
+        for pu, pw in pred_edges.get(v, []):
+            if pu == u:
+                return pw
+        return ""
 
     while q:
         v = q.popleft()
-        t = status[v]
+        t = status.get(v)
+        if not t:
+            continue
 
         if t == NodeType.LOSE:
-            # predecessors become WIN
+            # predecessors can become WIN (they can move to a LOSE node)
             for u in preds.get(v, []):
-                if status.get(u):
-                    continue
-                status[u] = NodeType.WIN
-                q.append(u)
+                if status.get(u) is None:
+                    status[u] = NodeType.WIN
+                    w = _pick_word_for_edge(u, v)
+                    win_witness[u] = (w, v)
+                    mate_dist[u] = int(mate_dist.get(v, 0)) + 1
+                    q.append(u)
+                elif status.get(u) == NodeType.WIN:
+                    # better (shorter) witness possible
+                    new_d = int(mate_dist.get(v, 0)) + 1
+                    old_d = mate_dist.get(u)
+                    if old_d is None or new_d < int(old_d):
+                        w = _pick_word_for_edge(u, v)
+                        win_witness[u] = (w, v)
+                        mate_dist[u] = new_d
+
         elif t == NodeType.WIN:
             # decrement predecessors; if no remaining moves, they become LOSE
             for u in preds.get(v, []):
@@ -283,14 +389,265 @@ def _retrograde_syllables(
                 remaining[u] = max(0, int(remaining.get(u, 0)) - 1)
                 if remaining[u] == 0:
                     status[u] = NodeType.LOSE
+
+                    # all successors are WIN (by definition here), pick the one that maximizes mate_dist
+                    best_move: Optional[Tuple[str, str]] = None
+                    best_succ_d = -1
+                    for w2, to2 in moves.get(u, []):
+                        if status.get(to2) != NodeType.WIN:
+                            continue
+                        d2 = int(mate_dist.get(to2, 0))
+                        if d2 > best_succ_d:
+                            best_succ_d = d2
+                            best_move = (w2, to2)
+                        elif d2 == best_succ_d and best_move is not None:
+                            # deterministic tie-breaker for display (shorter word first)
+                            if (len(w2), w2) < (len(best_move[0]), best_move[0]):
+                                best_move = (w2, to2)
+
+                    if best_move is None:
+                        # fallback: choose any (shortest) move
+                        mv = moves.get(u, [])
+                        if mv:
+                            best_move = min(mv, key=lambda x: (len(x[0]), x[0]))
+                            best_succ_d = int(mate_dist.get(best_move[1], 0))
+                        else:
+                            best_move = ("", "")
+                            best_succ_d = 0
+
+                    lose_best[u] = best_move
+                    mate_dist[u] = best_succ_d + 1
                     q.append(u)
 
     for n in nodes:
         if not status.get(n):
             status[n] = NodeType.DRAW
 
+    return status, out_moves, in_moves, moves, preds, pred_edges, win_witness, lose_best, mate_dist
+
+
+def _retrograde_syllables(
+    words: List[str],
+) -> Tuple[
+    Dict[str, str],
+    Dict[str, int],
+    Dict[str, int],
+    Dict[str, List[Tuple[str, str]]],
+    Dict[str, List[str]],
+]:
+    """Compatibility wrapper used by rebuild_analysis()."""
+    status, out_moves, in_moves, moves, preds, _pred_edges, _ww, _lb, _dist = _retrograde_proof(words)
     return status, out_moves, in_moves, moves, preds
 
+
+def _find_draw_cycle(
+    start: str,
+    moves: Dict[str, List[Tuple[str, str]]],
+    status: Dict[str, str],
+    max_depth: int = 8,
+) -> Optional[List[Tuple[str, str, str]]]:
+    """Try to find a short cycle within DRAW subgraph.
+
+    Returns list of (from, word, to) if found.
+    """
+    if status.get(start) != NodeType.DRAW:
+        return None
+
+    from collections import deque as _dq
+
+    # node -> (prev_node, word)
+    prev: Dict[str, Tuple[str, str]] = {}
+    q = _dq([(start, 0)])
+    visited = {start}
+
+    while q:
+        u, d = q.popleft()
+        if d >= max_depth:
+            continue
+        for w, v in moves.get(u, []):
+            if status.get(v) != NodeType.DRAW:
+                continue
+            if v == start and u != start:
+                # reconstruct: start -> ... -> u -> start
+                path_nodes = [u]
+                while path_nodes[-1] != start:
+                    pn, _pw = prev[path_nodes[-1]]
+                    path_nodes.append(pn)
+                path_nodes.reverse()  # [start, ..., u]
+                # build edges
+                edges: List[Tuple[str, str, str]] = []
+                cur = start
+                for nxt in path_nodes[1:]:
+                    pn, pw = prev[nxt]
+                    edges.append((pn, pw, nxt))
+                    cur = nxt
+                edges.append((u, w, start))
+                return edges
+
+            if v not in visited:
+                visited.add(v)
+                prev[v] = (u, w)
+                q.append((v, d + 1))
+
+    return None
+
+
+def explain_syllable(
+    *,
+    analysis_key: str,
+    words: List[str],
+    syllable: str,
+    max_steps: int = 10,
+) -> Dict[str, object]:
+    """Explain why a syllable is WIN/LOSE/DRAW, including a sample word route."""
+
+    g = get_computed_graph(analysis_key=analysis_key, words=words)
+
+    syl = (syllable or "").strip()
+    t = g.status.get(syl)
+    if not syl or not t:
+        return {
+            "syllable": syl,
+            "node_type": None,
+            "reason": "unknown syllable",
+            "allowed_first": [],
+            "line": [],
+        }
+
+    allowed = sorted(list(allowed_first_chars(syl)))
+    out_n = int(g.out_moves.get(syl, 0))
+
+    reason = ""
+    if t == NodeType.WIN:
+        w, v = g.win_witness.get(syl, ("", ""))
+        md = g.mate_dist.get(syl)
+        if w and v:
+            reason = f"WIN: '{w}'(으)로 '{v}'에 보내면 상대는 LOSE 상태가 된다."
+        else:
+            reason = "WIN: 상대를 LOSE로 보내는 수가 존재한다."
+        if md is not None:
+            reason += f" (최단 {md}수 내 승리)"
+    elif t == NodeType.LOSE:
+        if out_n == 0:
+            reason = "LOSE: 낼 수 있는 단어가 0개라서 즉시 패배."
+        else:
+            md = g.mate_dist.get(syl)
+            reason = "LOSE: 어떤 단어를 내더라도 상대가 WIN 전략을 가진다."
+            if md is not None:
+                reason += f" (최선으로 버텨도 약 {md}수 내 패배)"
+    else:
+        reason = "DRAW: 승/패가 결정되지 않는 순환(무한 루프 가능) 영역."
+
+    # Build a principal variation line (sample route).
+    line: List[Dict[str, object]] = []
+
+    cur = syl
+    player = 0  # 0: 나(현재 플레이어), 1: 상대
+    for step in range(max_steps):
+        ct = g.status.get(cur)
+        if ct == NodeType.LOSE and int(g.out_moves.get(cur, 0)) == 0:
+            # terminal loss for player to move
+            line.append(
+                {
+                    "turn": step + 1,
+                    "player": "상대" if player == 1 else "나",
+                    "from": cur,
+                    "word": None,
+                    "to": None,
+                    "to_type": None,
+                    "note": "낼 수 있는 단어가 없어 패배",
+                }
+            )
+            break
+
+        if ct == NodeType.DRAW:
+            cyc = _find_draw_cycle(cur, g.moves, g.status, max_depth=min(8, max_steps))
+            if cyc:
+                for (u, w, v) in cyc[: max_steps - step]:
+                    line.append(
+                        {
+                            "turn": len(line) + 1,
+                            "player": "상대" if player == 1 else "나",
+                            "from": u,
+                            "word": w,
+                            "to": v,
+                            "to_type": g.status.get(v),
+                            "note": "DRAW 순환 예시",
+                        }
+                    )
+                    player = 1 - player
+                break
+            line.append(
+                {
+                    "turn": step + 1,
+                    "player": "상대" if player == 1 else "나",
+                    "from": cur,
+                    "word": None,
+                    "to": None,
+                    "to_type": None,
+                    "note": "DRAW: 순환 영역(예시 경로를 찾지 못함)",
+                }
+            )
+            break
+
+        move: Optional[Tuple[str, str]] = None
+        note = ""
+        if ct == NodeType.WIN:
+            move = g.win_witness.get(cur)
+            if not move:
+                # fallback: pick any move to LOSE
+                cands = [(w, v) for (w, v) in g.moves.get(cur, []) if g.status.get(v) == NodeType.LOSE]
+                if cands:
+                    move = min(cands, key=lambda x: (len(x[0]), x[0]))
+            note = "상대를 LOSE로 보내는 수" if move else "WIN이지만 증거 수를 찾지 못함"
+        elif ct == NodeType.LOSE:
+            move = g.lose_best.get(cur)
+            if not move:
+                mv = g.moves.get(cur, [])
+                if mv:
+                    move = min(mv, key=lambda x: (len(x[0]), x[0]))
+            note = "최선의 방어(버티기)" if move else "LOSE이지만 이동이 없음"
+
+        if not move or not move[0] or not move[1]:
+            line.append(
+                {
+                    "turn": step + 1,
+                    "player": "상대" if player == 1 else "나",
+                    "from": cur,
+                    "word": None,
+                    "to": None,
+                    "to_type": None,
+                    "note": "경로 생성 실패",
+                }
+            )
+            break
+
+        w, nxt = move
+        line.append(
+            {
+                "turn": step + 1,
+                "player": "상대" if player == 1 else "나",
+                "from": cur,
+                "word": w,
+                "to": nxt,
+                "to_type": g.status.get(nxt),
+                "note": note,
+            }
+        )
+
+        cur = nxt
+        player = 1 - player
+
+    return {
+        "syllable": syl,
+        "node_type": t,
+        "reason": reason,
+        "allowed_first": allowed,
+        "out_moves": out_n,
+        "in_moves": int(g.in_moves.get(syl, 0)),
+        "mate_dist": g.mate_dist.get(syl),
+        "line": line,
+    }
 
 def rebuild_analysis(
     db: Session,

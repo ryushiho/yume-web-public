@@ -56,7 +56,7 @@
       <tbody>
         {% for r in rows %}
           <tr>
-            <td style="font-weight:700;">{{ r.syllable }}</td>
+            <td style="font-weight:700;"><a href="/admin/analysis/syllable/{{ r.syllable }}?list={{ list_name }}&pack={{ pack or '' }}" style="color:inherit; text-decoration:underline;">{{ r.syllable }}</a></td>
             <td>{{ r.node_type }}</td>
             <td>{{ r.out_moves }}</td>
             <td>{{ r.in_moves }}</td>

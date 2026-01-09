@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}음절 상세{% endblock %}
+{% block header_title %}음절 상세{% endblock %}
+
+{% block content %}
+  <h1>음절 상세</h1>
+
+  <div style="margin-bottom:0.8rem;">
+    <a class="btn btn-secondary" href="/admin/analysis/syllables?list={{ list_name }}&pack={{ pack or '' }}">← 음절 목록</a>
+    <a class="btn btn-secondary" href="/admin/analysis/?list={{ list_name }}&pack={{ pack or '' }}">분석</a>
+  </div>
+
+  <div style="color:#9ca3af; font-size:0.9rem; margin-bottom:0.6rem;">
+    analysis_key: <code>{{ analysis_key }}</code>
+  </div>
+
+  <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220; margin-bottom:1rem;">
+    <div style="display:flex; gap:0.6rem; align-items:baseline; flex-wrap:wrap;">
+      <div style="font-size:2rem; font-weight:900; letter-spacing:-0.02em;">{{ info.syllable }}</div>
+      <div style="padding:0.2rem 0.6rem; border-radius:999px; border:1px solid #1f2937; font-weight:800; font-size:0.9rem;">
+        {{ info.node_type or "UNKNOWN" }}
+      </div>
+    </div>
+
+    <div style="margin-top:0.6rem; color:#cbd5e1; line-height:1.55;">
+      {{ info.reason }}
+    </div>
+
+    <div style="display:flex; gap:1.2rem; flex-wrap:wrap; margin-top:0.9rem; color:#9ca3af; font-size:0.92rem;">
+      <div>allowed_first: <code>{{ info.allowed_first }}</code></div>
+      <div>out: <code>{{ info.out_moves }}</code></div>
+      <div>in: <code>{{ info.in_moves }}</code></div>
+      {% if info.mate_dist is not none %}
+        <div>mate_dist: <code>{{ info.mate_dist }}</code></div>
+      {% endif %}
+    </div>
+
+    <div style="margin-top:0.8rem;">
+      <form method="get" action="/admin/analysis/syllable/{{ syllable }}" style="display:flex; gap:0.6rem; flex-wrap:wrap; align-items:flex-end; margin:0;">
+        <input type="hidden" name="list" value="{{ list_name }}" />
+        <input type="hidden" name="pack" value="{{ pack or '' }}" />
+        <div>
+          <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">경로 길이</div>
+          <input class="input" type="number" name="max_steps" value="{{ max_steps }}" min="3" max="30" style="width:110px;" />
+        </div>
+        <button type="submit" class="btn btn-secondary">적용</button>
+      </form>
+    </div>
+  </div>
+
+  <div style="overflow:auto; border:1px solid #1f2937; border-radius:0.8rem;">
+    <table class="table" style="min-width:980px;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>플레이어</th>
+          <th>시작</th>
+          <th>단어</th>
+          <th>도착</th>
+          <th>도착 타입</th>
+          <th>메모</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in info.line %}
+          <tr>
+            <td>{{ r.turn }}</td>
+            <td>{{ r.player }}</td>
+            <td style="font-weight:800;">{{ r.from }}</td>
+            <td style="font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">
+              {{ r.word }}
+            </td>
+            <td style="font-weight:800;">{{ r.to }}</td>
+            <td>{{ r.to_type }}</td>
+            <td style="color:#9ca3af; font-size:0.9rem;">{{ r.note }}</td>
+          </tr>
+        {% endfor %}
+        {% if not info.line %}
+          <tr>
+            <td colspan="7" style="color:#9ca3af;">표시할 경로가 없습니다.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

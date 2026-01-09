@@ -13,7 +13,7 @@ from app.dependencies import get_db, get_current_admin_user
 from app.utils.wordlists import WORDLIST_LABELS
 from app.utils import dictpacks
 from app.config import settings
-from app.bluewar.analysis_engine import prepare_input, rebuild_analysis
+from app.bluewar.analysis_engine import prepare_input, rebuild_analysis, explain_syllable
 from app import models
 
 
@@ -138,6 +138,35 @@ def analysis_syllables(
         },
     )
 
+
+@router.get("/syllable/{syllable}")
+def analysis_syllable_detail(
+    syllable: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    list_name = (request.query_params.get("list") or "blue_archive_words").strip()
+    pack = (request.query_params.get("pack") or "").strip() or None
+    max_steps = int((request.query_params.get("max_steps") or "10").strip() or "10")
+    max_steps = max(3, min(30, max_steps))
+
+    meta_input, words = prepare_input(db, list_name=list_name, pack_version=pack)
+    info = explain_syllable(analysis_key=meta_input.analysis_key, words=words, syllable=syllable, max_steps=max_steps)
+
+    return templates.TemplateResponse(
+        "admin_analysis_syllable_detail.html",
+        {
+            "request": request,
+            "list_labels": WORDLIST_LABELS,
+            "list_name": list_name,
+            "pack": pack,
+            "analysis_key": meta_input.analysis_key,
+            "syllable": syllable,
+            "max_steps": max_steps,
+            "info": info,
+        },
+    )
 
 @router.get("/words")
 def analysis_words(
