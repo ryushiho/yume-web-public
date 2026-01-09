@@ -77,18 +77,50 @@ def _load_words_from_pack(*, version: str, list_name: str) -> Optional[List[str]
         except Exception:
             return None
 
-    words = []
+    def _iter_tokens(line: str) -> List[str]:
+        """Return word tokens from a single line.
+
+        Supports both:
+          - one word per line: "갑니다토라마루"
+          - grouped by syllable: "갑 : 갑니다토라마루, 갑작스러운제안"
+          - comma separated: "a, b, c"
+        """
+        s = (line or "").strip()
+        if not s:
+            return []
+        if s.startswith("#"):
+            return []
+
+        if ":" in s:
+            # "갑 : ..." 형태면 ':' 오른쪽만 파싱
+            _, right = s.split(":", 1)
+            s = right.strip()
+            if not s:
+                return []
+
+        # commas first
+        if "," in s:
+            parts = [x.strip() for x in s.split(",")]
+        else:
+            # fallback: whitespace separated tokens
+            parts = s.split()
+
+        return [p for p in parts if p]
+
+    words: List[str] = []
     seen = set()
     for raw in text.splitlines():
-        w = _normalize_word(raw)
-        if not w:
-            continue
-        if any(ch.isspace() for ch in w):
-            continue
-        if w in seen:
-            continue
-        seen.add(w)
-        words.append(w)
+        for tok in _iter_tokens(raw):
+            w = _normalize_word(tok)
+            if not w:
+                continue
+            # Don't allow internal whitespace in a word token.
+            if any(ch.isspace() for ch in w):
+                continue
+            if w in seen:
+                continue
+            seen.add(w)
+            words.append(w)
     return words
 
 
@@ -655,6 +687,7 @@ def rebuild_analysis(
     list_name: str = "blue_archive_words",
     pack_version: Optional[str] = None,
     sample_words: int = 8,
+    progress_cb=None,
 ) -> AnalysisInput:
     """Recompute and store analysis results.
 
@@ -663,7 +696,20 @@ def rebuild_analysis(
 
     meta, words = prepare_input(db, list_name=list_name, pack_version=pack_version)
 
+    def _progress(cur: int, total: int, msg: str) -> None:
+        if progress_cb:
+            try:
+                progress_cb(int(cur), int(total), str(msg))
+            except Exception:
+                # Progress is best-effort; never break analysis.
+                pass
+
+    total_steps = 5
+    _progress(1, total_steps, "compute graph")
+
     status, out_moves, in_moves, moves, _preds = _retrograde_syllables(words)
+
+    _progress(2, total_steps, "delete old rows")
 
     # Remove existing rows for this key
     db.query(models.BlueWarSyllableStat).filter(models.BlueWarSyllableStat.analysis_key == meta.analysis_key).delete()
@@ -671,6 +717,8 @@ def rebuild_analysis(
     db.query(models.BlueWarAnalysisMeta).filter(models.BlueWarAnalysisMeta.analysis_key == meta.analysis_key).delete()
 
     now = datetime.utcnow()
+
+    _progress(3, total_steps, "insert meta")
 
     # Insert meta
     db.add(
@@ -685,6 +733,8 @@ def rebuild_analysis(
             created_at=now,
         )
     )
+
+    _progress(4, total_steps, "insert syllables")
 
     # Syllable stats
     syl_rows: List[models.BlueWarSyllableStat] = []
@@ -712,6 +762,8 @@ def rebuild_analysis(
         )
 
     db.bulk_save_objects(syl_rows)
+
+    _progress(5, total_steps, "insert words & commit")
 
     # Word stats (type derived from end syllable)
     word_rows: List[models.BlueWarWordStat] = []

@@ -330,6 +330,39 @@ class BlueWarWordStat(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
 
 
+class BlueWarAnalysisJob(Base):
+    """비동기 분석 작업 상태.
+
+    FastAPI 요청을 오래 잡아먹지 않기 위해, 분석을 백그라운드 스레드에서 수행한다.
+
+    NOTE:
+      - SQLite + 단일 uvicorn worker(운영 기본) 기준.
+      - 작업 실행 중 서버가 재시작되면 RUNNING 상태로 남을 수 있으니,
+        UI에서는 "최근 작업"만 참고하고, 필요하면 재실행하도록 한다.
+    """
+
+    __tablename__ = "bluewar_analysis_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    analysis_key = Column(String(64), nullable=False, index=True)
+    list_name = Column(String(50), nullable=False, index=True)
+    pack_version = Column(String(16), nullable=True, index=True)
+
+    # PENDING/RUNNING/DONE/ERROR
+    status = Column(String(20), nullable=False, default="PENDING", index=True)
+
+    progress_current = Column(Integer, nullable=False, default=0)
+    progress_total = Column(Integer, nullable=False, default=0)
+    message = Column(Text, nullable=True)
+
+    error_text = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    started_at = Column(DateTime, nullable=True, index=True)
+    finished_at = Column(DateTime, nullable=True, index=True)
+
+
 
 # ============================
 # Abydos Mini-game (Aby) tables

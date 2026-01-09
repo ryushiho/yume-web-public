@@ -8,7 +8,34 @@
 
   {% if ok %}
     <div style="padding:0.6rem 0.8rem; background:#0b3a2a; border:1px solid #064e3b; border-radius:0.5rem; margin-bottom:1rem;">
-      ✅ 갱신 완료
+      ✅ 요청 처리: {{ ok }}
+    </div>
+  {% endif %}
+
+  {% if job and job.status in ['PENDING', 'RUNNING'] %}
+    <div style="padding:0.6rem 0.8rem; background:#1f2937; border:1px solid #374151; border-radius:0.5rem; margin-bottom:1rem;">
+      ⏳ 분석 실행 중 ({{ job.status }})
+      {% if job.progress_total and job.progress_total > 0 %}
+        — {{ job.progress_current }}/{{ job.progress_total }}
+      {% endif %}
+      {% if job.message %}
+        — {{ job.message }}
+      {% endif %}
+      {% if job.started_at %}
+        <div style="color:#9ca3af; font-size:0.85rem; margin-top:0.35rem;">started: {{ job.started_at }}</div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if job and job.status == 'ERROR' %}
+    <div style="padding:0.6rem 0.8rem; background:#3a0b0b; border:1px solid #7f1d1d; border-radius:0.5rem; margin-bottom:1rem;">
+      ❌ 최근 분석 작업 실패
+      {% if job.message %}
+        — {{ job.message }}
+      {% endif %}
+      {% if job.finished_at %}
+        <div style="color:#9ca3af; font-size:0.85rem; margin-top:0.35rem;">finished: {{ job.finished_at }}</div>
+      {% endif %}
     </div>
   {% endif %}
 
@@ -55,7 +82,11 @@
           <span style="color:#9ca3af; font-size:0.9rem;">저장된 분석이 없음</span>
         {% endif %}
         <form method="post" action="/admin/analysis/rebuild?list={{ list_name }}&pack={{ pack or '' }}" style="margin:0;">
-          <button type="submit" class="btn btn-primary">분석 갱신</button>
+          {% if job and job.status in ['PENDING', 'RUNNING'] %}
+            <button type="submit" class="btn btn-secondary" disabled>분석 실행 중...</button>
+          {% else %}
+            <button type="submit" class="btn btn-primary">분석 갱신</button>
+          {% endif %}
         </form>
       </div>
     </div>

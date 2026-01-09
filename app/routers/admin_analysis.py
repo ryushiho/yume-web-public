@@ -13,7 +13,8 @@ from app.dependencies import get_db, get_current_admin_user
 from app.utils.wordlists import WORDLIST_LABELS
 from app.utils import dictpacks
 from app.config import settings
-from app.bluewar.analysis_engine import prepare_input, rebuild_analysis, explain_syllable
+from app.bluewar.analysis_engine import prepare_input, explain_syllable
+from app.bluewar.analysis_jobs import enqueue_rebuild_job
 from app import models
 
 
@@ -50,6 +51,14 @@ def analysis_index(
         .first()
     )
 
+    # latest job for this key (may be None)
+    job = (
+        db.query(models.BlueWarAnalysisJob)
+        .filter(models.BlueWarAnalysisJob.analysis_key == meta_input.analysis_key)
+        .order_by(models.BlueWarAnalysisJob.id.desc())
+        .first()
+    )
+
     packs = _pack_versions()
     packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
     packs_default = (settings.WORDLIST_PACKS_DEFAULT or "").strip()
@@ -66,6 +75,7 @@ def analysis_index(
             "default_pack": default_pack,
             "meta_input": meta_input,
             "stored": stored,
+            "job": job,
             "ok": ok,
             "error": error,
         },
@@ -83,15 +93,15 @@ def analysis_rebuild(
     pack = (request.query_params.get("pack") or "").strip() or None
 
     try:
-        rebuild_analysis(db, list_name=list_name, pack_version=pack)
+        enqueue_rebuild_job(db, list_name=list_name, pack_version=pack)
     except Exception:
         return RedirectResponse(
-            url=f"/admin/analysis/?list={list_name}&pack={pack or ''}&error=rebuild",
+            url=f"/admin/analysis/?list={list_name}&pack={pack or ''}&error=queue",
             status_code=303,
         )
 
     return RedirectResponse(
-        url=f"/admin/analysis/?list={list_name}&pack={pack or ''}&ok=1",
+        url=f"/admin/analysis/?list={list_name}&pack={pack or ''}&ok=queued",
         status_code=303,
     )
 
