@@ -257,6 +257,81 @@ class BlueWarWordListSnapshot(Base):
 
 
 # ============================
+# BlueWar Analysis (syllable/word win-lose classification)
+# ============================
+
+
+class BlueWarAnalysisMeta(Base):
+    """분석 메타(캐시 키/버전/해시).
+
+    - analysis_key: words_sha + dooum_sha + algo_version 기반
+    - list_name: 어떤 리스트를 분석했는지 (blue_archive_words / suggestion / public_words)
+    - pack_version: 월별 dict pack 버전(YYYY-MM). DB 기반 분석이면 NULL
+    """
+
+    __tablename__ = "bluewar_analysis_meta"
+
+    id = Column(Integer, primary_key=True, index=True)
+    analysis_key = Column(String(64), nullable=False, index=True)
+    list_name = Column(String(50), nullable=False, index=True)
+    pack_version = Column(String(16), nullable=True, index=True)
+
+    words_sha256 = Column(String(64), nullable=False)
+    word_count = Column(Integer, nullable=False, default=0)
+    dooum_sha256 = Column(String(64), nullable=False)
+    algo_version = Column(String(64), nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class BlueWarSyllableStat(Base):
+    """음절(노드) 단위 승패 분류 결과."""
+
+    __tablename__ = "bluewar_syllable_stats"
+    __table_args__ = (
+        UniqueConstraint("analysis_key", "syllable", name="uq_bluewar_syllable_stats_key_syl"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    analysis_key = Column(String(64), nullable=False, index=True)
+
+    syllable = Column(String(10), nullable=False, index=True)
+    node_type = Column(String(10), nullable=False, index=True)  # WIN/LOSE/DRAW
+
+    out_moves = Column(Integer, nullable=False, default=0)
+    in_moves = Column(Integer, nullable=False, default=0)
+
+    win_moves = Column(Integer, nullable=False, default=0)
+    lose_moves = Column(Integer, nullable=False, default=0)
+    draw_moves = Column(Integer, nullable=False, default=0)
+
+    # JSON list of sample words that send the opponent to a LOSE syllable
+    sample_win_words = Column(Text, nullable=True)
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+
+
+class BlueWarWordStat(Base):
+    """단어 단위 승패 분류 결과."""
+
+    __tablename__ = "bluewar_word_stats"
+    __table_args__ = (
+        UniqueConstraint("analysis_key", "word", name="uq_bluewar_word_stats_key_word"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    analysis_key = Column(String(64), nullable=False, index=True)
+
+    word = Column(String(200), nullable=False, index=True)
+    start_syllable = Column(String(10), nullable=True, index=True)
+    end_syllable = Column(String(10), nullable=True, index=True)
+    node_type = Column(String(10), nullable=False, index=True)  # WIN/LOSE/DRAW
+
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+
+
+
+# ============================
 # Abydos Mini-game (Aby) tables
 # - Bot -> Web sync payload
 # ============================

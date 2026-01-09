@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}음절 분석{% endblock %}
+{% block header_title %}음절 분석{% endblock %}
+
+{% block content %}
+  <h1>음절 분석</h1>
+
+  <div style="margin-bottom:0.8rem;">
+    <a class="btn btn-secondary" href="/admin/analysis/?list={{ list_name }}&pack={{ pack or '' }}">← 분석</a>
+    <a class="btn btn-secondary" href="/admin/analysis/words?list={{ list_name }}&pack={{ pack or '' }}">단어</a>
+  </div>
+
+  <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220; margin-bottom:1rem;">
+    <form method="get" action="/admin/analysis/syllables" style="display:flex; gap:0.6rem; flex-wrap:wrap; align-items:flex-end; margin:0;">
+      <input type="hidden" name="list" value="{{ list_name }}" />
+      <input type="hidden" name="pack" value="{{ pack or '' }}" />
+
+      <div>
+        <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">검색</div>
+        <input class="input" type="text" name="q" value="{{ q }}" placeholder="음절" style="min-width:180px;" />
+      </div>
+      <div>
+        <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">타입</div>
+        <select name="t" class="input" style="min-width:120px;">
+          <option value="" {% if not t %}selected{% endif %}>전체</option>
+          <option value="WIN" {% if t == 'WIN' %}selected{% endif %}>WIN</option>
+          <option value="LOSE" {% if t == 'LOSE' %}selected{% endif %}>LOSE</option>
+          <option value="DRAW" {% if t == 'DRAW' %}selected{% endif %}>DRAW</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">표시</div>
+        <input class="input" type="number" name="limit" value="{{ limit }}" min="10" max="2000" style="width:110px;" />
+      </div>
+      <button type="submit" class="btn btn-secondary">적용</button>
+    </form>
+  </div>
+
+  <div style="color:#9ca3af; font-size:0.9rem; margin-bottom:0.6rem;">
+    analysis_key: <code>{{ analysis_key }}</code>
+  </div>
+
+  <div style="overflow:auto; border:1px solid #1f2937; border-radius:0.8rem;">
+    <table class="table" style="min-width:820px;">
+      <thead>
+        <tr>
+          <th>음절</th>
+          <th>타입</th>
+          <th>out</th>
+          <th>in</th>
+          <th>win_moves</th>
+          <th>sample_win_words</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td style="font-weight:700;">{{ r.syllable }}</td>
+            <td>{{ r.node_type }}</td>
+            <td>{{ r.out_moves }}</td>
+            <td>{{ r.in_moves }}</td>
+            <td>{{ r.win_moves }}</td>
+            <td style="color:#9ca3af; font-size:0.9rem;">{{ r.sample_win_words }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}단어 분석{% endblock %}
+{% block header_title %}단어 분석{% endblock %}
+
+{% block content %}
+  <h1>블루전 단어 분석</h1>
+
+  {% if ok %}
+    <div style="padding:0.6rem 0.8rem; background:#0b3a2a; border:1px solid #064e3b; border-radius:0.5rem; margin-bottom:1rem;">
+      ✅ 갱신 완료
+    </div>
+  {% endif %}
+
+  {% if error %}
+    <div style="padding:0.6rem 0.8rem; background:#3a0b0b; border:1px solid #7f1d1d; border-radius:0.5rem; margin-bottom:1rem;">
+      ❌ 오류: {{ error }}
+    </div>
+  {% endif %}
+
+  <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220; margin-bottom:1rem;">
+    <form method="get" action="/admin/analysis/" style="display:flex; gap:0.6rem; flex-wrap:wrap; align-items:flex-end; margin:0;">
+      <div>
+        <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">리스트</div>
+        <select name="list" class="input" style="min-width:220px;">
+          {% for k, v in list_labels.items() %}
+            <option value="{{ k }}" {% if k == list_name %}selected{% endif %}>{{ v }} ({{ k }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">월별 팩</div>
+        <select name="pack" class="input" style="min-width:160px;">
+          <option value="" {% if not pack %}selected{% endif %}>기본{% if default_pack %} ({{ default_pack }}){% endif %}</option>
+          {% for v in packs %}
+            <option value="{{ v }}" {% if pack == v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-secondary">조회</button>
+    </form>
+  </div>
+
+  <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220;">
+    <div style="display:flex; justify-content:space-between; gap:0.8rem; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <div style="font-weight:700; font-size:1.05rem;">현재 입력(해시 기준)</div>
+        <div style="color:#9ca3af; font-size:0.9rem;">analysis_key가 같으면 같은 결과로 간주</div>
+      </div>
+      <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
+        {% if stored %}
+          <a class="btn btn-secondary" href="/admin/analysis/syllables?list={{ list_name }}&pack={{ pack or '' }}">음절</a>
+          <a class="btn btn-secondary" href="/admin/analysis/words?list={{ list_name }}&pack={{ pack or '' }}">단어</a>
+        {% else %}
+          <span style="color:#9ca3af; font-size:0.9rem;">저장된 분석이 없음</span>
+        {% endif %}
+        <form method="post" action="/admin/analysis/rebuild?list={{ list_name }}&pack={{ pack or '' }}" style="margin:0;">
+          <button type="submit" class="btn btn-primary">분석 갱신</button>
+        </form>
+      </div>
+    </div>
+
+    <hr style="border:none; border-top:1px solid #1f2937; margin:0.9rem 0;" />
+
+    <div style="display:grid; grid-template-columns: 1fr; gap:0.4rem; font-size:0.95rem;">
+      <div><span style="color:#9ca3af;">리스트</span> {{ meta_input.list_name }}</div>
+      <div><span style="color:#9ca3af;">팩 버전</span> {{ meta_input.pack_version if meta_input.pack_version else 'DB' }}</div>
+      <div><span style="color:#9ca3af;">단어 수</span> {{ meta_input.word_count }}</div>
+      <div><span style="color:#9ca3af;">words_sha</span> <code>{{ meta_input.words_sha256 }}</code></div>
+      <div><span style="color:#9ca3af;">dooum_sha</span> <code>{{ meta_input.dooum_sha256 }}</code></div>
+      <div><span style="color:#9ca3af;">algo</span> {{ meta_input.algo_version }}</div>
+      <div><span style="color:#9ca3af;">analysis_key</span> <code>{{ meta_input.analysis_key }}</code></div>
+    </div>
+
+    {% if stored %}
+      <hr style="border:none; border-top:1px solid #1f2937; margin:0.9rem 0;" />
+      <div style="color:#9ca3af; font-size:0.9rem;">저장된 분석 생성 시각: {{ stored.created_at }}</div>
+    {% endif %}
+  </div>
+
+{% endblock %}
