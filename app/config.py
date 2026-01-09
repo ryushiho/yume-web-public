@@ -63,6 +63,13 @@ class Settings:
         #   서버에서 캐시가 유지된다.
         self.BLUEWAR_ANALYSIS_CACHE_DIR: str = os.getenv("YUME_BLUEWAR_ANALYSIS_CACHE_DIR", "").strip()
 
+        # Phase5: 자동 분석 트리거(선택)
+        # - 1이면 활성, 0이면 비활성
+        # - 운영 기본값은 1 (입력 변경 시 자동으로 분석 작업을 큐에 올린다)
+        self.BLUEWAR_AUTO_ANALYSIS_ON_STARTUP: bool = os.getenv("YUME_BLUEWAR_AUTO_ANALYSIS_ON_STARTUP", "1").strip() not in ("0", "false", "False")
+        self.BLUEWAR_AUTO_ANALYSIS_ON_PACK_UPLOAD: bool = os.getenv("YUME_BLUEWAR_AUTO_ANALYSIS_ON_PACK_UPLOAD", "1").strip() not in ("0", "false", "False")
+
+
 
 # FastAPI 전체에서 쓰는 전역 설정 인스턴스
 settings = Settings()

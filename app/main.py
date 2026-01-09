@@ -28,6 +28,10 @@ from app.seed_import import ensure_blue_records_seed
 from app.seed_wordlists import seed_wordlist_snapshots
 from app import models
 from app.security import hash_password
+from app.config import settings as app_settings
+from app.bluewar.analysis_engine import prepare_input
+from app.bluewar.analysis_jobs import enqueue_rebuild_job, JOB_PENDING, JOB_RUNNING
+
 
 logger = logging.getLogger(__name__)
 
@@ -167,5 +171,47 @@ def _startup_seed_import() -> None:
                 db.commit()
         except Exception:
             logger.exception("bootstrap admin seed failed")
+    finally:
+        db.close()
+
+
+@app.on_event("startup")
+def _startup_auto_bluewar_analysis() -> None:
+    """Phase5: 서비스 기동 시 기본 팩에 대한 분석이 없으면 자동으로 작업을 큐에 올린다.
+
+    - 분석은 백그라운드 스레드에서 진행되므로, 서비스 기동을 막지 않는다.
+    - env: YUME_BLUEWAR_AUTO_ANALYSIS_ON_STARTUP=0 이면 비활성.
+    """
+
+    if not getattr(app_settings, "BLUEWAR_AUTO_ANALYSIS_ON_STARTUP", True):
+        return
+
+    db = SessionLocal()
+    try:
+        inp, _words = prepare_input(db, list_name="blue_archive_words", pack_version=None)
+
+        # 이미 결과가 있으면 패스
+        meta = (
+            db.query(models.BlueWarAnalysisMeta)
+            .filter(models.BlueWarAnalysisMeta.analysis_key == inp.analysis_key)
+            .first()
+        )
+        if meta:
+            return
+
+        # 이미 같은 키로 작업이 돌고 있으면 패스
+        job = (
+            db.query(models.BlueWarAnalysisJob)
+            .filter(models.BlueWarAnalysisJob.analysis_key == inp.analysis_key)
+            .order_by(models.BlueWarAnalysisJob.id.desc())
+            .first()
+        )
+        if job and job.status in (JOB_PENDING, JOB_RUNNING):
+            return
+
+        enqueue_rebuild_job(db, list_name=inp.list_name, pack_version=inp.pack_version)
+        logger.info("[bluewar-analysis] auto enqueued on startup", extra={"analysis_key": inp.analysis_key})
+    except Exception:
+        logger.exception("auto bluewar analysis enqueue failed")
     finally:
         db.close()

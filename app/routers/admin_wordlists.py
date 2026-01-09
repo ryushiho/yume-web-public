@@ -30,6 +30,8 @@ from app.routers.api_wordlists import (
 
 from app.utils.time import fmt_kst
 from app.utils.wordlists import WORDLIST_LABELS
+from app.bluewar.analysis_jobs import enqueue_rebuild_job
+
 from app.utils import dictpacks
 from app.utils.multipart_guard import HAS_MULTIPART
 from app.config import settings
@@ -200,7 +202,8 @@ if HAS_MULTIPART:
         blue_archive_words: UploadFile = File(...),
         suggestion: UploadFile = File(...),
         public_words: UploadFile = File(...),
-        _admin: Dict[str, Any] = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
     ):
         """관리자 전용: 월별(버전) 단어 DB 팩 업로드 (multipart/form-data)."""
         v = (dict_version or "").strip()
@@ -255,12 +258,21 @@ if HAS_MULTIPART:
         except Exception:
             return RedirectResponse(url="/admin/wordlists/?error=pack_upload&which=pack", status_code=303)
 
+
+        # Phase5: 팩 업로드 후 자동 분석 트리거(백그라운드)
+        try:
+            if getattr(settings, "BLUEWAR_AUTO_ANALYSIS_ON_PACK_UPLOAD", True):
+                enqueue_rebuild_job(db, list_name="blue_archive_words", pack_version=v)
+        except Exception:
+            pass
+
         return RedirectResponse(url=f"/admin/wordlists/?ok=1&which=pack:{quote(v)}", status_code=303)
 else:
     @router.post("/packs/upload")
     async def admin_packs_upload(
         _request: Request,
-        _admin: Dict[str, Any] = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
     ):
         """multipart 미설치 환경: 업로드 엔드포인트를 비활성화한다(서비스 기동은 유지)."""
         return RedirectResponse(url="/admin/wordlists/?error=multipart_missing&which=pack", status_code=303)
@@ -269,6 +281,7 @@ else:
 @router.post("/packs/delete/{dict_version}")
 async def admin_packs_delete(
     dict_version: str,
+    db: Session = Depends(get_db),
     _admin: Dict[str, Any] = Depends(get_current_admin_user),
 ):
     v = (dict_version or "").strip()
@@ -297,6 +310,7 @@ async def admin_packs_delete(
 @router.post("/packs/set_default/{dict_version}")
 async def admin_packs_set_default(
     dict_version: str,
+    db: Session = Depends(get_db),
     _admin: Dict[str, Any] = Depends(get_current_admin_user),
 ):
     v = (dict_version or "").strip()
@@ -325,6 +339,7 @@ def admin_pack_file_page(
     request: Request,
     dict_version: str,
     list_name: str,
+    db: Session = Depends(get_db),
     _admin: Dict[str, Any] = Depends(get_current_admin_user),
 ):
     """월별(버전) 단어 DB 팩의 개별 파일 관리(간단 뷰/다운로드/업로드)."""
@@ -383,7 +398,8 @@ if HAS_MULTIPART:
         dict_version: str = Form(...),
         list_name: str = Form(...),
         file: UploadFile = File(...),
-        _admin: Dict[str, Any] = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
     ):
         """월별(버전) 팩에 파일 1개만 업로드(덮어쓰기).
 
@@ -448,7 +464,8 @@ else:
     @router.post("/packs/upload_one")
     async def admin_packs_upload_one(
         _request: Request,
-        _admin: Dict[str, Any] = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
     ):
         return RedirectResponse(url="/admin/wordlists/?error=multipart_missing&which=pack", status_code=303)
 
@@ -541,8 +558,8 @@ if HAS_MULTIPART:
         request: Request,
         list_name: str,
         file: UploadFile = File(...),
-        db: Session = Depends(get_db),
-        _admin: Dict[str, Any] = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
     ):
         """관리자 페이지 폼 업로드 처리(전체 덮어쓰기).
 
@@ -599,7 +616,8 @@ else:
     @router.post("/upload/{list_name}")
     async def admin_wordlists_upload(
         list_name: str,
-        _admin: Dict[str, Any] = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
     ):
         return RedirectResponse(url=f"/admin/wordlists/?error=multipart_missing&which={quote(list_name)}", status_code=303)
 
