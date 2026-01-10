@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Request, Form
+from fastapi import APIRouter, Depends, Request, Form, UploadFile, File
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
@@ -19,6 +19,7 @@ from app.config import settings
 from app.bluewar.analysis_engine import prepare_input, explain_syllable, explain_word
 from app.bluewar.analysis_jobs import enqueue_rebuild_job
 from app.bluewar.suggestion_export import build_suggestion_text, fetch_neutral_words
+from app.bluewar import upload_store
 from app.routers.api_wordlists import _parse_txt as parse_wordlist_txt
 from app import models
 
@@ -30,6 +31,65 @@ templates = Jinja2Templates(directory="app/templates")
 def _pack_versions() -> list[str]:
     packs_dir = (settings.WORDLIST_PACKS_DIR or "").strip()
     return dictpacks.list_versions(packs_dir)
+
+
+@router.get("/upload")
+def analysis_upload_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    # Upload analysis intentionally focuses on the main game list.
+    list_name = (request.query_params.get("list") or "blue_archive_words").strip()
+    if list_name != "blue_archive_words":
+        list_name = "blue_archive_words"
+
+    uploads = upload_store.list_uploads(limit=30)
+    return templates.TemplateResponse(
+        "admin_analysis_upload.html",
+        {
+            "request": request,
+            "list_labels": {"blue_archive_words": WORDLIST_LABELS.get("blue_archive_words", "루트전 단어")},
+            "list_name": list_name,
+            "uploads": uploads,
+            "ok": (request.query_params.get("ok") or "").strip() or None,
+            "error": (request.query_params.get("error") or "").strip() or None,
+        },
+    )
+
+
+@router.post("/upload")
+async def analysis_upload_submit(
+    request: Request,
+    list: str = Form("blue_archive_words"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _admin: Dict[str, Any] = Depends(get_current_admin_user),
+):
+    list_name = (list or "").strip() or "blue_archive_words"
+    if list_name != "blue_archive_words":
+        list_name = "blue_archive_words"
+
+    if not file or not file.filename:
+        return RedirectResponse(url="/admin/analysis/upload?error=no_file", status_code=303)
+
+    # Read whole file (txt). Keep a simple safety limit.
+    raw = await file.read()
+    if not raw:
+        return RedirectResponse(url="/admin/analysis/upload?error=empty", status_code=303)
+    if len(raw) > 20 * 1024 * 1024:
+        return RedirectResponse(url="/admin/analysis/upload?error=too_large", status_code=303)
+
+    info = upload_store.save_upload(list_name=list_name, original_filename=file.filename, raw=raw)
+    pack = f"upload:{info.upload_id}"
+
+    # Immediately enqueue an async rebuild job.
+    enqueue_rebuild_job(db, list_name=list_name, pack_version=pack)
+
+    return RedirectResponse(
+        url=f"/admin/analysis/?list={list_name}&pack={pack}&ok=upload_queued",
+        status_code=303,
+    )
 
 
 def _read_text_robust(path: Path) -> str:
@@ -257,7 +317,9 @@ def analysis_suggestion_download(
     words = fetch_neutral_words(db, meta_input.analysis_key)
     txt = build_suggestion_text(words, fmt=fmt)  # type: ignore[arg-type]
 
-    fn = f"suggestion_{meta_input.list_name}_{meta_input.pack_version or 'db'}_{meta_input.analysis_key[:8]}.txt"
+    safe_list = (meta_input.list_name or "").replace(":", "_")
+    safe_pack = (meta_input.pack_version or "db").replace(":", "_")
+    fn = f"suggestion_{safe_list}_{safe_pack}_{meta_input.analysis_key[:8]}.txt"
     headers = {"Content-Disposition": f'attachment; filename="{fn}"'}
     return Response(content=txt, media_type="text/plain; charset=utf-8", headers=headers)
 
@@ -285,6 +347,12 @@ def analysis_suggestion_diff_download(
     if not stored or not meta_input.pack_version:
         return RedirectResponse(
             url=f"/admin/analysis/?list={list_name}&pack={pack or ''}&error=no_result",
+            status_code=303,
+        )
+
+    if meta_input.pack_version.startswith("upload:"):
+        return RedirectResponse(
+            url=f"/admin/analysis/?list={list_name}&pack={meta_input.pack_version}&error=upload_pack",
             status_code=303,
         )
 
@@ -319,7 +387,8 @@ def analysis_suggestion_diff_download(
     lines.append("")
 
     content = "\n".join(lines)
-    fn = f"suggestion_diff_{meta_input.pack_version}_{meta_input.analysis_key[:8]}.txt"
+    safe_pack = meta_input.pack_version.replace(":", "_")
+    fn = f"suggestion_diff_{safe_pack}_{meta_input.analysis_key[:8]}.txt"
     headers = {"Content-Disposition": f'attachment; filename="{fn}"'}
     return Response(content=content, media_type="text/plain; charset=utf-8", headers=headers)
 
@@ -340,6 +409,13 @@ def analysis_suggestion_apply(
     if not target_pack:
         return RedirectResponse(
             url=f"/admin/analysis/?list={list_name}&error=need_pack",
+            status_code=303,
+        )
+
+    # Uploaded packs are not real dict-pack versions (can't be applied).
+    if target_pack.startswith("upload:"):
+        return RedirectResponse(
+            url=f"/admin/analysis/?list={list_name}&pack={target_pack}&error=upload_pack",
             status_code=303,
         )
 

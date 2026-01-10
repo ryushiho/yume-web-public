@@ -59,12 +59,16 @@
         <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">월별 팩</div>
         <select name="pack" class="input" style="min-width:160px;">
           <option value="" {% if not pack %}selected{% endif %}>기본{% if default_pack %} ({{ default_pack }}){% endif %}</option>
+          {% if pack and pack.startswith('upload:') %}
+            <option value="{{ pack }}" selected>업로드 ({{ pack[7:] }})</option>
+          {% endif %}
           {% for v in packs %}
             <option value="{{ v }}" {% if pack == v %}selected{% endif %}>{{ v }}</option>
           {% endfor %}
         </select>
       </div>
       <button type="submit" class="btn btn-secondary">조회</button>
+      <a class="btn btn-secondary" href="/admin/analysis/upload">업로드 분석</a>
     </form>
   </div>
 
@@ -118,7 +122,7 @@
           <a class="btn btn-secondary" href="/admin/analysis/suggestion.txt?list={{ list_name }}&pack={{ pack or '' }}&fmt=grouped">다운로드 (묶음)</a>
           <a class="btn btn-secondary" href="/admin/analysis/suggestion.txt?list={{ list_name }}&pack={{ pack or '' }}&fmt=plain">다운로드 (1줄)</a>
 
-          {% if meta_input.pack_version %}
+          {% if meta_input.pack_version and not meta_input.pack_version.startswith('upload:') %}
             <form method="post" action="/admin/analysis/suggestion/apply?list={{ list_name }}&pack={{ pack or '' }}" style="margin:0;">
               <input type="hidden" name="fmt" value="grouped" />
               <button type="submit" class="btn btn-primary">팩에 적용 (묶음)</button>
@@ -128,7 +132,7 @@
               <button type="submit" class="btn btn-secondary">팩에 적용 (1줄)</button>
             </form>
           {% else %}
-            <span style="color:#9ca3af; font-size:0.85rem;">팩 버전(월) 선택 시 적용 가능</span>
+            <span style="color:#9ca3af; font-size:0.85rem;">월별 팩 선택 시 적용 가능</span>
           {% endif %}
 
           <span style="color:#9ca3af; font-size:0.85rem;">중립 단어 수: {{ neutral_word_count }}</span>

@@ -14,6 +14,7 @@ from app.utils import dictpacks
 from app.config import settings
 from .dooum import allowed_first_chars, dooum_signature
 from . import analysis_cache
+from . import upload_store
 
 
 ALGO_VERSION = "syllable-retrograde-v1"
@@ -180,7 +181,15 @@ def prepare_input(
         resolved_pack = dictpacks.get_default_version(env_override=packs_dir, env_default=packs_default)
 
     if resolved_pack:
-        words = _load_words_from_pack(version=resolved_pack, list_name=list_name)
+        # Special pack format: "upload:<upload_id>" (Phase 7)
+        if resolved_pack.startswith("upload:"):
+            upload_id = (resolved_pack.split(":", 1)[1] or "").strip()
+            words = upload_store.load_upload_words(upload_id=upload_id, list_name=list_name)
+            # Upload analysis must not fall back to DB packs.
+            if words is None:
+                words = []
+        else:
+            words = _load_words_from_pack(version=resolved_pack, list_name=list_name)
 
     # Fallback to DB
     if words is None:
