@@ -70,6 +70,21 @@
       <button type="submit" class="btn btn-secondary">조회</button>
       <a class="btn btn-secondary" href="/admin/analysis/upload">업로드 분석</a>
     </form>
+
+    <div style="margin-top:0.9rem; border-top:1px solid #1f2937; padding-top:0.9rem;">
+      <div style="font-weight:600; margin-bottom:0.35rem;">.txt 업로드로 바로 분석</div>
+      <form method="post" action="/admin/analysis/upload" enctype="multipart/form-data" style="display:flex; gap:0.6rem; flex-wrap:wrap; align-items:flex-end; margin:0;">
+        <input type="hidden" name="list" value="blue_archive_words" />
+        <div>
+          <div style="font-size:0.85rem; color:#9ca3af; margin-bottom:0.25rem;">단어집(.txt)</div>
+          <input class="input" type="file" name="file" accept=".txt" style="min-width:340px;" required />
+        </div>
+        <button type="submit" class="btn btn-primary">업로드 + 분석 시작</button>
+      </form>
+      <div style="margin-top:0.4rem; color:#9ca3af; font-size:0.82rem;">
+        월별 팩/DB 대신 <b>업로드한 파일만</b>으로 분석합니다. 단어가 추가된 새 파일을 올리면 그대로 다시 뽑을 수 있어요.
+      </div>
+    </div>
   </div>
 
   <div style="border:1px solid #1f2937; border-radius:0.8rem; padding:1rem; background:#0b1220;">
